@@ -1,0 +1,32 @@
+.editorconfig
+  h_5b1b81f5de3695 1-12
+.claude/settings.json
+  h_5b1b81f5de3695 1-14
+.git-ai-ignore
+  h_5b1b81f5de3695 1-3
+.claude/hooks/install-git-ai.sh
+  s_5fe2e198626ef8::t_014a397f7fba44 1-38
+.github/CODEOWNERS
+  h_5b1b81f5de3695 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "756c460fd89880f74ca54ce1aa177aac4c7c141f",
+  "prompts": {},
+  "humans": {
+    "h_5b1b81f5de3695": {
+      "author": "Thomas Wheeler <tnwheeler@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_5fe2e198626ef8": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "198c49f5-50e4-4df6-8102-6dc52facb292",
+        "model": "unknown"
+      },
+      "human_author": "Thomas Wheeler <tnwheeler@gmail.com>"
+    }
+  }
+}
