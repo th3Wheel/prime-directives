@@ -1,0 +1,39 @@
+master/AGENTS.master.md
+  s_b639f41481fc5b::t_dd7ffb261ecc9a 1-38
+master/CLAUDE.master.md
+  s_b639f41481fc5b::t_0244c96475bdf8 1
+master/GEMINI.master.md
+  s_b639f41481fc5b::t_6d9c2169587bc8 1
+master/copilot-instructions.master.md
+  s_b639f41481fc5b::t_c891ef930717a0 1-10
+master/references/docs.master.md
+  s_b639f41481fc5b::t_d54dbf1e399bd6 1-7
+master/references/git.master.md
+  s_b639f41481fc5b::t_b23e801b551007 1-10
+master/references/python.master.md
+  s_b639f41481fc5b::t_389b05dec6c59f 1-9
+master/references/shell.master.md
+  s_b639f41481fc5b::t_c72a5c4f425082 1-8
+master/references/typescript.master.md
+  s_b639f41481fc5b::t_df7d4c3bd016ab 1-8
+master/references/yaml.master.md
+  s_b639f41481fc5b::t_454e83456b450f 1-7
+master/settings.master.json
+  s_b639f41481fc5b::t_98ee801f0ff8cb 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "7eb1fece66dc2ac0fbd67a3eee5ed339bb851ef6",
+  "prompts": {},
+  "sessions": {
+    "s_b639f41481fc5b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "s_b639f41481fc5b",
+        "model": "unknown"
+      },
+      "human_author": "th3wheel-agent <353578131+th3wheel-agent@users.noreply.github.com>"
+    }
+  }
+}
