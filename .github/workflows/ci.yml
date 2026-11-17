@@ -1,0 +1,22 @@
+# DRAFT example CI that still runs for PRs opened by github-actions[bot].
+# Install as .github/workflows/ci.yml (replace the placeholder step with the repo's real checks).
+name: CI
+on:
+  push:
+    branches: ['agent/**']        # agent pushes (App token pushes DO trigger workflows)
+  pull_request:                   # human PRs and later pushes by humans
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    # A push to an agent branch with an open PR fires both events; keep only the push run for agent/** branches.
+    if: github.event_name == 'push' || !startsWith(github.head_ref, 'agent/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4   # pin to a commit SHA before installing
+      - name: Checks
+        run: echo "replace with real checks (lint, tests)"
