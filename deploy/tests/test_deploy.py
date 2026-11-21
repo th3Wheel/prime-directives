@@ -188,3 +188,57 @@ def test_parse_version() -> None:
 
 def test_deploy_error_type_exported() -> None:
     assert issubclass(DeployError, Exception)
+
+
+def test_scan_flags_lock_entry_not_in_release(release: Path, target: Path) -> None:
+    import hashlib
+
+    init(release, target)
+    (target / "evil.md").write_text("# evil\n")
+    lock_path = target / LOCK_PATH
+    lock = json.loads(lock_path.read_text())
+    digest = hashlib.sha256(b"# evil\n").hexdigest()
+    lock["files"].append(
+        {"target": "evil.md", "source": "x", "sha256": digest, "kind": "file", "keys": []}
+    )
+    lock_path.write_text(json.dumps(lock))
+    result = scan(target, LocalSource(release), None)
+    assert any("evil.md" in p and "not part of" in p for p in result.problems)
+    assert run(release, "scan", "--path", str(target)) == 1
+
+
+def test_load_removes_stale_generated_reference(release: Path, target: Path) -> None:
+    init(release, target)
+    stale = target / ".prime-directives/python.md"
+    assert stale.is_file()
+    (release / "master/references/python.master.md").unlink()
+    assert run(release, "load", "--to", "v2.0", "--path", str(target)) == 0
+    assert not stale.exists()
+    assert run(release, "scan", "--path", str(target)) == 0
+
+
+def test_load_refuses_to_delete_hand_edited_stale_reference(release: Path, target: Path) -> None:
+    init(release, target)
+    stale = target / ".prime-directives/python.md"
+    stale.write_text(stale.read_text() + "my notes\n")
+    (release / "master/references/python.master.md").unlink()
+    assert run(release, "load", "--to", "v2.0", "--path", str(target)) == 1
+    assert stale.exists()
+
+
+@pytest.mark.parametrize("payload", ["[]", '"text"', "7"])
+def test_non_object_lock_is_a_lock_error_not_a_traceback(
+    release: Path, target: Path, payload: str
+) -> None:
+    init(release, target)
+    (target / LOCK_PATH).write_text(payload)
+    assert run(release, "render", "--path", str(target)) == 1
+    assert run(release, "scan", "--path", str(target)) == 1
+
+
+@pytest.mark.parametrize("payload", ["[]", '"text"'])
+def test_non_object_master_settings_are_rejected(
+    release: Path, target: Path, payload: str
+) -> None:
+    (release / "master/settings.master.json").write_text(payload)
+    assert run(release, "initialize", str(target)) == 1

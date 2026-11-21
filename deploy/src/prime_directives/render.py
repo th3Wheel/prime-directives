@@ -108,7 +108,7 @@ def render_release(
                 )
             )
 
-    managed = json.loads(read("settings.master.json"))
+    managed = _load_managed(read("settings.master.json"))
     if profile == "master":
         managed["chat.useNestedAgentsMdFiles"] = False
     merged = _merge_settings(existing_settings, managed, tag, repo)
@@ -118,6 +118,16 @@ def render_release(
         )
     )
     return out
+
+
+def _load_managed(text: str) -> dict[str, object]:
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise RenderError(f"master/settings.master.json is not valid JSON: {exc}") from exc
+    if not isinstance(data, dict):
+        raise RenderError("master/settings.master.json must contain a JSON object")
+    return data
 
 
 def _merge_settings(existing: str | None, managed: dict[str, object], tag: str, repo: str) -> str:

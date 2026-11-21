@@ -100,15 +100,46 @@ def _protect_existing(
     return moves
 
 
+def _stale_outputs(
+    root: Path, previous: dict[str, LockedFile], new_targets: set[str]
+) -> list[tuple[str, Path]]:
+    """Generated references the new release no longer emits; they are removed on apply.
+
+    Only unedited files under .prime-directives/ (never local/) qualify. A stale file that was
+    edited by hand is refused rather than deleted.
+    """
+    stale: list[tuple[str, Path]] = []
+    for target, entry in previous.items():
+        rel = Path(target)
+        if target in new_targets or entry.kind != "file" or rel.is_absolute() or ".." in rel.parts:
+            continue
+        parts = rel.parts
+        if parts[:1] != (".prime-directives",) or parts[:2] == (".prime-directives", "local"):
+            continue
+        path = root / rel
+        if not path.is_file():
+            continue
+        text = path.read_text()
+        if not is_generated(text) or sha256(text) != entry.sha256:
+            raise DeployError(
+                f"{target} is no longer part of the release but was edited by hand; "
+                "move or remove it by hand, then retry"
+            )
+        stale.append((target, path))
+    return stale
+
+
 def apply(
     root: Path, release: Release, repo: str, *, profile: str = "project", confirm: bool = False
 ) -> tuple[Lock, dict[str, tuple[str, str]]]:
     """Render and write. Returns the new lock and {target: (old, new)} for the diff."""
     files = _render(root, release, repo, profile)
     try:
-        managed = {f.target for f in read_lock(root).files}
+        previous = {f.target: f for f in read_lock(root).files}
     except LockError:
-        managed = set()
+        previous = {}
+    managed = set(previous)
+    stale = _stale_outputs(root, previous, {f.target for f in files})
     moves = _protect_existing(root, files, confirm, managed)
     changes: dict[str, tuple[str, str]] = {}
     for src, dest in moves:
@@ -121,6 +152,9 @@ def apply(
             changes[item.target] = (old, item.content)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(item.content)
+    for target, path in stale:
+        changes[target] = (path.read_text(), "")
+        path.unlink()
     (root / LOCAL_DIR).mkdir(parents=True, exist_ok=True)
     keep = root / LOCAL_DIR / ".gitkeep"
     if not any((root / LOCAL_DIR).iterdir()):
@@ -241,6 +275,12 @@ def scan(root: Path, source, min_version: str | None) -> ScanResult:
         with source.fetch(lock.tag) as release:
             _check_commit(lock, release)
             expected = _render(root, release, lock.repo, lock.profile)
+        expected_targets = {item.target for item in expected}
+        for target in sorted(locked):
+            if target not in expected_targets:
+                result.problems.append(
+                    f"{target}: in the lock but not part of the {lock.tag} release"
+                )
         for item in expected:
             if item.target not in locked or locked[item.target].sha256 != item.locked().sha256:
                 result.problems.append(f"{item.target}: lock does not match the release {lock.tag}")
