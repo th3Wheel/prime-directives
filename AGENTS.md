@@ -21,7 +21,7 @@ Responsibilities: understand requirements, clarify objectives, plan, decompose, 
 
 The orchestrator never writes code. It spawns a worker subagent for any implementation, choosing the model from the task (a cheaper model by default). That covers production code, edits to application files, refactors, tests, migrations, dependency installs and repetitive changes. After the worker finishes, the orchestrator reviews the worker's diff against the handoff and reports to Thomas.
 
-Exceptions: the user asks explicitly, emergency remediation, or a trivial change (10 lines or fewer).
+Exceptions: the user asks explicitly, no worker is available, emergency remediation, or a trivial change (10 lines or fewer).
 
 ## Worker
 
@@ -70,7 +70,7 @@ Known Risks:
 Completion Status:
 ```
 
-Every commit ends with the trailer `Agent-Session: <session URL or id>` so the PR workflow can show it. Worker output is a description of the pushed branch; the workflow, not the worker, opens the PR.
+Every commit ends with the trailer `Agent-Session: <session URL or id>`. The workflow reads only the head commit, so the head commit's message body (from line 3 on) is the summary Thomas sees: put the description there. Worker output is a description of the pushed branch; the workflow, not the worker, opens the PR.
 
 ## Acceptance Criteria Template
 
@@ -119,7 +119,7 @@ Action: Return To Worker
 | Level | Meaning | Effect |
 |---|---|---|
 | Critical | Security issue, data loss, failed tests or typing, acceptance not met | Blocks; escalate to Thomas immediately |
-| Major | Architecture violation, maintainability, validation not run | Blocks; return to worker |
+| Major | Architecture violation, maintainability, validation not run | Usually blocks; return to worker |
 | Minor | Naming, style, documentation suggestions | Does not block; note it |
 | Informational | Observations | Document only |
 
@@ -148,7 +148,7 @@ Only Thomas approves, merges and waives gates. A reviewer may not give APPROVE-R
 
 ## Repos with their own AGENTS.md
 
-A target repo's own `AGENTS.md` (for example battlestar-ventana-design-system and its 16 ground rules) is added on top of this file and wins on design details. These roles and the approval rules still apply.
+A target repo's own `AGENTS.md` (for example battlestar-ventana-design-system and its 16 ground rules) is added on top of this file and wins on design details and on its own branch naming, PR opener and issue-linking rules (for example `wp/<ID>` branches and `Closes #<n>`), which override the `agent/<task-id>` handoff fields where that repo has no PR-opener workflow. These roles and the approval rules still apply.
 
 ## Development Standards
 
