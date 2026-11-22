@@ -310,3 +310,44 @@ def test_malformed_lock_field_types_are_lock_errors(release: Path, target: Path,
     lock_path.write_text(json.dumps(data))
     assert run(release, "render", "--path", str(target)) == 1
     assert run(release, "scan", "--path", str(target)) == 1
+
+
+def test_equivalent_version_forms_compare_equal() -> None:
+    assert parse_version("v1.0") == parse_version("v1.0.0")
+    assert parse_version("v1.10") > parse_version("v1.2.0")
+    assert parse_version("v0.0.0") == parse_version("v0")
+
+
+def test_min_version_accepts_equivalent_form(release: Path, target: Path) -> None:
+    init(release, target)
+    assert run(release, "load", "--to", "v1.0", "--path", str(target)) == 0
+    assert run(release, "scan", "--min-version", "v1.0.0", "--path", str(target)) == 0
+
+
+def test_repo_override_rejected_for_existing_lock(release: Path, target: Path) -> None:
+    init(release, target)
+    before = (target / LOCK_PATH).read_text()
+    for cmd in ("render", "load", "scan"):
+        assert run(release, "--repo", "someone/fork", cmd, "--path", str(target)) == 1
+    assert (target / LOCK_PATH).read_text() == before
+
+
+def test_failed_post_render_scan_rolls_back(release: Path, target: Path) -> None:
+    (target / "sub").mkdir()
+    (target / "sub" / "AGENTS.md").write_text("# nested, no stub\n")
+    assert run(release, "initialize", str(target)) == 1
+    assert not (target / LOCK_PATH).exists()
+    assert not (target / "AGENTS.md").exists()
+    assert (target / "sub" / "AGENTS.md").read_text() == "# nested, no stub\n"
+
+
+def test_failed_load_scan_restores_previous_state(release: Path, target: Path) -> None:
+    init(release, target)
+    before = {p: p.read_text() for p in target.rglob("*") if p.is_file()}
+    (target / "sub").mkdir()
+    (target / "sub" / "AGENTS.md").write_text("# nested, no stub\n")
+    before[target / "sub" / "AGENTS.md"] = "# nested, no stub\n"
+    (release / "master/AGENTS.master.md").write_text("# Rules v2\n")
+    assert run(release, "load", "--to", "v2.0", "--path", str(target)) == 1
+    after = {p: p.read_text() for p in target.rglob("*") if p.is_file()}
+    assert after == before

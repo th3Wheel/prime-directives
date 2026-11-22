@@ -35,7 +35,10 @@ def parse_version(tag: str) -> tuple[int, ...]:
     match = re.fullmatch(r"v?(\d+(?:\.\d+)*)", tag)
     if not match:
         raise SourceError(f"{tag!r} is not a version tag like v1.3 or v0.1.0")
-    return tuple(int(p) for p in match.group(1).split("."))
+    parts = [int(p) for p in match.group(1).split(".")]
+    while len(parts) > 1 and parts[-1] == 0:
+        parts.pop()  # v1.0 and v1.0.0 are the same version
+    return tuple(parts)
 
 
 def _retry[T](fn: Callable[[], T], attempts: int = 4) -> T:

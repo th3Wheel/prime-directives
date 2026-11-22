@@ -5,7 +5,7 @@ from __future__ import annotations
 import difflib
 import json
 import shutil
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -65,6 +65,22 @@ def _refuse_symlinks(root: Path, rel: str | Path) -> None:
             raise DeployError(
                 f"{current.relative_to(root)} is a symlink; refusing to write through it"
             )
+
+
+def _snapshot(root: Path, rels: set[str]) -> Callable[[], None]:
+    """Remember these files so a failed post-render scan can put everything back."""
+    saved = {rel: (root / rel).read_bytes() if (root / rel).is_file() else None for rel in rels}
+
+    def undo() -> None:
+        for rel, data in saved.items():
+            path = root / rel
+            if data is None:
+                path.unlink(missing_ok=True)
+            else:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+
+    return undo
 
 
 def _render(root: Path, release: Release, repo: str, profile: str) -> list[Rendered]:
@@ -142,8 +158,8 @@ def _stale_outputs(
 
 def apply(
     root: Path, release: Release, repo: str, *, profile: str = "project", confirm: bool = False
-) -> tuple[Lock, dict[str, tuple[str, str]]]:
-    """Render and write. Returns the new lock and {target: (old, new)} for the diff."""
+) -> tuple[Lock, dict[str, tuple[str, str]], Callable[[], None]]:
+    """Render and write. Returns the new lock, {target: (old, new)} for the diff, and an undo."""
     files = _render(root, release, repo, profile)
     try:
         previous = {f.target: f for f in read_lock(root).files}
@@ -162,6 +178,13 @@ def apply(
     _refuse_symlinks(root, LOCAL_DIR)
     _refuse_symlinks(root, LOCK_PATH)
     changes: dict[str, tuple[str, str]] = {}
+    touched = (
+        {f.target for f in files}
+        | {t for t, _ in stale}
+        | {str(p.relative_to(root)) for pair in moves for p in pair}
+        | {LOCK_PATH.as_posix(), (LOCAL_DIR / ".gitkeep").as_posix()}
+    )
+    undo = _snapshot(root, touched)
     for src, dest in moves:
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(src, dest)
@@ -188,7 +211,7 @@ def apply(
         files=[f.locked() for f in files],
     )
     write_lock(root, lock)
-    return lock, changes
+    return lock, changes, undo
 
 
 def format_diff(changes: dict[str, tuple[str, str]]) -> str:
@@ -209,8 +232,8 @@ def initialize(root: Path, source, repo: str, tag: str | None, confirm: bool) ->
     if (root / LOCK_PATH).exists():
         raise DeployError("already initialized; use `load` to change the pinned version")
     with source.fetch(tag) as release:
-        lock, changes = apply(root, release, repo, confirm=confirm)
-    _must_pass(root, source, lock)
+        lock, changes, undo = apply(root, release, repo, confirm=confirm)
+    _must_pass(root, source, lock, undo)
     return lock, format_diff(changes)
 
 
@@ -218,8 +241,8 @@ def render(root: Path, source) -> tuple[Lock, str]:
     lock = _read(root)
     with source.fetch(lock.tag) as release:
         _check_commit(lock, release)
-        new, changes = apply(root, release, lock.repo, profile=lock.profile, confirm=False)
-    _must_pass(root, source, new)
+        new, changes, undo = apply(root, release, lock.repo, profile=lock.profile, confirm=False)
+    _must_pass(root, source, new, undo)
     return new, format_diff(changes)
 
 
@@ -228,8 +251,8 @@ def load(root: Path, source, tag: str | None, confirm: bool) -> tuple[Lock, str]
     with source.fetch(tag) as release:
         if release.tag == lock.tag:
             _check_commit(lock, release)  # same tag must still be the same commit
-        new, changes = apply(root, release, lock.repo, profile=lock.profile, confirm=confirm)
-    _must_pass(root, source, new)
+        new, changes, undo = apply(root, release, lock.repo, profile=lock.profile, confirm=confirm)
+    _must_pass(root, source, new, undo)
     return new, format_diff(changes)
 
 
@@ -238,8 +261,8 @@ def self_render(root: Path, source, repo: str, tag: str | None) -> tuple[Lock, s
     if not (root / "master" / "AGENTS.master.md").is_file():
         raise DeployError("`self` runs in the master repo (no master/AGENTS.master.md here)")
     with source.fetch(tag) as release:
-        lock, changes = apply(root, release, repo, profile="master", confirm=True)
-    _must_pass(root, source, lock)
+        lock, changes, undo = apply(root, release, repo, profile="master", confirm=True)
+    _must_pass(root, source, lock, undo)
     return lock, format_diff(changes)
 
 
@@ -258,11 +281,13 @@ def _check_commit(lock: Lock, release: Release) -> None:
         )
 
 
-def _must_pass(root: Path, source, lock: Lock) -> None:
+def _must_pass(root: Path, source, lock: Lock, undo: Callable[[], None]) -> None:
     result = scan(root, source, min_version=None)
     if not result.ok:
+        undo()  # leave the target exactly as it was
         raise DeployError(
-            "post-render scan failed:\n  " + "\n  ".join(result.problems + result.unverified)
+            "post-render scan failed (changes rolled back):\n  "
+            + "\n  ".join(result.problems + result.unverified)
         )
 
 
