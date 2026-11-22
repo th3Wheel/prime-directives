@@ -2,6 +2,10 @@
 
 Every PR gets this rubric filled out by an AI reviewer **before** the human review. The reviewer is not the author, and its output is a comment only. It is never an approval and never counts toward code-owner review.
 
+## How it runs
+
+For agent PRs, the `Open agent PR` workflow opens the PR as a draft, then runs Claude Code Action as a read-only reviewer against this file as it exists on `main` (an agent cannot edit its own rubric). It posts the comment below. If the verdict is **Ready for human review** for the current head commit, the workflow marks the PR ready for review; otherwise the PR stays (or goes back to) draft. Needs the `ANTHROPIC_API_KEY` repository secret.
+
 ## How to fill it out
 
 For each criterion pick one rating and give evidence (file and line, check name, or a quoted line from the diff). A rating without evidence is invalid.
@@ -34,7 +38,7 @@ Post one comment starting with the marker line, so it can be found and updated:
 <!-- ai-review-rubric -->
 ## AI review rubric
 
-**Head commit reviewed:** `<sha>`
+**Head commit reviewed:** `<first 12 characters of the head SHA>`
 **Verdict:** Ready for human review | Needs fixes
 
 | # | Criterion | Rating | Evidence |
