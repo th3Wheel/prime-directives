@@ -19,6 +19,7 @@
 - [ ] Code is readable and maintainable
 - [ ] Naming is clear and consistent
 - [ ] No unnecessary complexity or duplication
+- [ ] Linters, formatters and type checks pass with no new warnings
 
 ### Testing
 - [ ] Relevant tests added or updated

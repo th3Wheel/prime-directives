@@ -27,6 +27,10 @@ Answer it with evidence, not a yes or no. Look at what the change relies on and 
 - Leave it unticked if the change depends on context that lives only in a chat, a session, a person's head, or an unstated assumption. Name the missing context and where it should be recorded.
 - Also note any step that would come out differently on a second run (unpinned versions, hidden environment, undocumented manual steps).
 
+## Linting
+
+The **Linting** item is about the repo's own linters, formatters and type checkers (for Python: ruff and ty), whichever apply to the files touched. Look for their results in the PR's checks (`gh pr checks`). Tick only if they pass with no new warnings. If no linter runs on the changed files, tick it as `N/A: no linter configured for <file types>`. Do not tick it on the strength of the diff alone, and never suggest disabling a rule to make it pass.
+
 ## The checklist
 
 ```markdown
@@ -41,6 +45,7 @@ Answer it with evidence, not a yes or no. Look at what the change relies on and 
 - [ ] Code is readable and maintainable
 - [ ] Naming is clear and consistent
 - [ ] No unnecessary complexity or duplication
+- [ ] Linters, formatters and type checks pass with no new warnings
 
 ### Testing
 - [ ] Relevant tests added or updated
