@@ -260,7 +260,13 @@ def self_render(root: Path, source, repo: str, tag: str | None) -> tuple[Lock, s
     """Master repo only: render the root from a pinned tag and add the guard section."""
     if not (root / "master" / "AGENTS.master.md").is_file():
         raise DeployError("`self` runs in the master repo (no master/AGENTS.master.md here)")
+    try:
+        current = read_lock(root)
+    except LockError:
+        current = None
     with source.fetch(tag) as release:
+        if current is not None and release.tag == current.tag:
+            _check_commit(current, release)  # same tag must still be the same commit
         lock, changes, undo = apply(root, release, repo, profile="master", confirm=True)
     _must_pass(root, source, lock, undo)
     return lock, format_diff(changes)

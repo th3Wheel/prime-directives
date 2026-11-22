@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -351,3 +352,45 @@ def test_failed_load_scan_restores_previous_state(release: Path, target: Path) -
     assert run(release, "load", "--to", "v2.0", "--path", str(target)) == 1
     after = {p: p.read_text() for p in target.rglob("*") if p.is_file()}
     assert after == before
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda d: d["files"][0].update(target="/etc/passwd"),
+        lambda d: d["files"][0].update(target="../outside.md"),
+        lambda d: d["files"][0].update(kind="weird"),
+    ],
+)
+def test_unsafe_lock_targets_and_unknown_kinds_are_rejected(
+    release: Path, target: Path, mutate
+) -> None:
+    init(release, target)
+    lock_path = target / LOCK_PATH
+    data = json.loads(lock_path.read_text())
+    mutate(data)
+    lock_path.write_text(json.dumps(data))
+    assert run(release, "scan", "--path", str(target)) == 1
+    assert run(release, "render", "--path", str(target)) == 1
+
+
+def test_non_utf8_lock_is_a_lock_error(release: Path, target: Path) -> None:
+    init(release, target)
+    (target / LOCK_PATH).write_bytes(b"\xff\xfe\x00bad")
+    assert run(release, "render", "--path", str(target)) == 1
+    assert run(release, "scan", "--path", str(target)) == 1
+
+
+def test_self_refuses_moved_tag(release: Path, tmp_path: Path) -> None:
+    from prime_directives.engine import self_render
+
+    root = tmp_path / "master-repo"
+    shutil.copytree(release / "master", root / "master")
+    assert main(["--source", str(release), "self", "--path", str(root)]) == 0
+    lock_path = root / LOCK_PATH
+    lock = json.loads(lock_path.read_text())
+    lock["commit"] = "a" * 40
+    lock_path.write_text(json.dumps(lock))
+    source = _MovedTagSource(release, lock["tag"], "b" * 40)
+    with pytest.raises(DeployError, match="must never move"):
+        self_render(root, source, lock["source"]["repo"], None)
