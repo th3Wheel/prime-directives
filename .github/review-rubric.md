@@ -4,7 +4,9 @@ Every PR carries the **Pull Request Review Checklist** below. An AI reviewer fil
 
 ## How it runs
 
-For agent PRs, the `Open agent PR` workflow opens the PR as a draft with the blank checklist in its description, then runs Claude Code Action as a read-only reviewer against this file as it exists on `main` (an agent cannot edit its own rubric). It posts the filled checklist as one comment. If the verdict is **Ready for human review** for the current head commit, the workflow marks the PR ready for review; otherwise the PR stays (or goes back to) draft. Needs the `ANTHROPIC_API_KEY` repository secret.
+For agent PRs, the `Open agent PR` workflow opens the PR as a draft with the blank checklist in its description, then runs Claude Code Action as a read-only reviewer against this file as it exists on `main` (an agent cannot edit its own rubric). It posts the filled checklist as one comment. If the verdict is **Ready for human review** for the current head commit, the workflow marks the PR ready for review; otherwise the PR stays (or goes back to) draft.
+
+The reviewer authenticates to Anthropic with workload identity federation (a short-lived GitHub Actions OIDC token exchanged for an Anthropic token), so there is no API key to store or rotate. Setup needs three repository **variables** (not secrets): `ANTHROPIC_FEDERATION_RULE_ID`, `ANTHROPIC_ORGANIZATION_ID` and `ANTHROPIC_SERVICE_ACCOUNT_ID`, plus `ANTHROPIC_WORKSPACE_ID` if the rule covers more than one workspace. If they are not set, the review is skipped and the PR stays a draft.
 
 ## How to fill it out
 

@@ -4,6 +4,7 @@
 # Enforcement lives outside the agent: this file is on main (CODEOWNERS: Thomas), the App has no Workflows
 # permission and (in the hybrid) no Pull requests permission, so the agent can't alter the template or edit the PR.
 # The AI review is a comment only. It never approves, and bots are never code owners.
+# The reviewer authenticates to Anthropic with workload identity federation (GitHub OIDC), not an API key.
 name: Open agent PR
 on:
   push:
@@ -163,33 +164,40 @@ jobs:
       issues: write          # PR comments are issue comments
       checks: read
       actions: read
+      id-token: write        # GitHub OIDC token, exchanged for an Anthropic token (workload identity federation)
     env:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
       PR: ${{ needs.open-pr.outputs.number }}
       SHA: ${{ github.sha }}
     steps:
-      - name: Check for Anthropic API key
+      # The federation IDs are not secrets, so they live in repository variables.
+      - name: Check federation settings
         id: gate
         env:
-          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          RULE: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
+          ORG: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
+          SVC: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
         run: |
-          if [ -n "$KEY" ]; then echo "has_key=true" >> "$GITHUB_OUTPUT"
-          else echo "::warning::ANTHROPIC_API_KEY secret is not set; skipping AI review. The PR stays a draft."; echo "has_key=false" >> "$GITHUB_OUTPUT"; fi
+          if [ -n "$RULE" ] && [ -n "$ORG" ] && [ -n "$SVC" ]; then echo "configured=true" >> "$GITHUB_OUTPUT"
+          else echo "::warning::ANTHROPIC_FEDERATION_RULE_ID, ANTHROPIC_ORGANIZATION_ID or ANTHROPIC_SERVICE_ACCOUNT_ID repository variable is not set; skipping AI review. The PR stays a draft."; echo "configured=false" >> "$GITHUB_OUTPUT"; fi
 
       # Default branch only: the rubric and any repo instructions come from main, never from the agent's branch.
       - name: Check out main
-        if: steps.gate.outputs.has_key == 'true'
+        if: steps.gate.outputs.configured == 'true'
         uses: actions/checkout@v4
         with:
           ref: main
           persist-credentials: false
 
       - name: Fill out the review checklist
-        if: steps.gate.outputs.has_key == 'true'
+        if: steps.gate.outputs.configured == 'true'
         uses: anthropics/claude-code-action@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          anthropic_federation_rule_id: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
+          anthropic_organization_id: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
+          anthropic_service_account_id: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
+          anthropic_workspace_id: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
           github_token: ${{ github.token }}
           prompt: |
             You are the AI reviewer for pull request #${{ env.PR }} in ${{ env.REPO }}. Head commit: ${{ env.SHA }}.
@@ -202,7 +210,7 @@ jobs:
             --allowedTools "Read,Grep,Glob,Write,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr checks:*),Bash(gh pr comment:*)"
 
       - name: Mark ready only on a clean verdict
-        if: steps.gate.outputs.has_key == 'true'
+        if: steps.gate.outputs.configured == 'true'
         run: |
           set -euo pipefail
           head=$(gh pr view "$PR" --repo "$REPO" --json headRefOid --jq .headRefOid)
