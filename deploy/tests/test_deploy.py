@@ -237,8 +237,76 @@ def test_non_object_lock_is_a_lock_error_not_a_traceback(
 
 
 @pytest.mark.parametrize("payload", ["[]", '"text"'])
-def test_non_object_master_settings_are_rejected(
-    release: Path, target: Path, payload: str
-) -> None:
+def test_non_object_master_settings_are_rejected(release: Path, target: Path, payload: str) -> None:
     (release / "master/settings.master.json").write_text(payload)
     assert run(release, "initialize", str(target)) == 1
+
+
+class _MovedTagSource:
+    """A source whose tag resolves to a different commit than the one the lock pins."""
+
+    def __init__(self, release: Path, tag: str, commit: str) -> None:
+        self._release, self._tag, self._commit = release, tag, commit
+
+    def fetch(self, tag: str | None):
+        from contextlib import contextmanager
+
+        from prime_directives.source import Release
+
+        @contextmanager
+        def _cm():
+            yield Release(tag=self._tag, commit=self._commit, root=self._release)
+
+        return _cm()
+
+
+def test_load_same_tag_refuses_moved_tag(release: Path, target: Path) -> None:
+    from prime_directives.engine import load
+
+    init(release, target)
+    lock_path = target / LOCK_PATH
+    lock = json.loads(lock_path.read_text())
+    lock["commit"] = "a" * 40
+    lock_path.write_text(json.dumps(lock))
+    source = _MovedTagSource(release, lock["tag"], "b" * 40)
+    with pytest.raises(DeployError, match="must never move"):
+        load(target, source, None, confirm=False)
+
+
+def test_symlinked_managed_file_is_not_written_through(
+    release: Path, target: Path, tmp_path: Path
+) -> None:
+    outside = tmp_path / "outside.md"
+    outside.write_text("keep me\n")
+    (target / "GEMINI.md").symlink_to(outside)
+    assert run(release, "initialize", str(target)) == 1
+    assert outside.read_text() == "keep me\n"
+
+
+def test_symlinked_lock_is_not_written_through(release: Path, target: Path, tmp_path: Path) -> None:
+    init(release, target)
+    outside = tmp_path / "outside.json"
+    outside.write_text("keep me\n")
+    (target / LOCK_PATH).unlink()
+    (target / LOCK_PATH).symlink_to(outside)
+    assert run(release, "load", "--to", "v2.0", "--path", str(target)) == 1
+    assert outside.read_text() == "keep me\n"
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda d: d["files"][0].update(target=7),
+        lambda d: d["files"][0].update(keys="abc"),
+        lambda d: d.update(tag=3),
+        lambda d: d.update(files=["x"]),
+    ],
+)
+def test_malformed_lock_field_types_are_lock_errors(release: Path, target: Path, mutate) -> None:
+    init(release, target)
+    lock_path = target / LOCK_PATH
+    data = json.loads(lock_path.read_text())
+    mutate(data)
+    lock_path.write_text(json.dumps(data))
+    assert run(release, "render", "--path", str(target)) == 1
+    assert run(release, "scan", "--path", str(target)) == 1

@@ -56,6 +56,17 @@ def _existing(root: Path, rel: str) -> str | None:
     return path.read_text() if path.is_file() else None
 
 
+def _refuse_symlinks(root: Path, rel: str | Path) -> None:
+    """Refuse to write through a symlink: it could point outside the target repo."""
+    current = root
+    for part in Path(rel).parts:
+        current = current / part
+        if current.is_symlink():
+            raise DeployError(
+                f"{current.relative_to(root)} is a symlink; refusing to write through it"
+            )
+
+
 def _render(root: Path, release: Release, repo: str, profile: str) -> list[Rendered]:
     try:
         return render_release(
@@ -141,6 +152,15 @@ def apply(
     managed = set(previous)
     stale = _stale_outputs(root, previous, {f.target for f in files})
     moves = _protect_existing(root, files, confirm, managed)
+    for item in files:
+        _refuse_symlinks(root, item.target)
+    for target, _ in stale:
+        _refuse_symlinks(root, target)
+    for src, dest in moves:
+        _refuse_symlinks(root, src.relative_to(root))
+        _refuse_symlinks(root, dest.relative_to(root))
+    _refuse_symlinks(root, LOCAL_DIR)
+    _refuse_symlinks(root, LOCK_PATH)
     changes: dict[str, tuple[str, str]] = {}
     for src, dest in moves:
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -206,6 +226,8 @@ def render(root: Path, source) -> tuple[Lock, str]:
 def load(root: Path, source, tag: str | None, confirm: bool) -> tuple[Lock, str]:
     lock = _read(root)
     with source.fetch(tag) as release:
+        if release.tag == lock.tag:
+            _check_commit(lock, release)  # same tag must still be the same commit
         new, changes = apply(root, release, lock.repo, profile=lock.profile, confirm=confirm)
     _must_pass(root, source, new)
     return new, format_diff(changes)
