@@ -36,6 +36,9 @@
 - [ ] Documentation/comments updated if needed
 - [ ] Breaking changes are identified
 
+### Reproducibility
+- [ ] If another AI agent inherited this repository tomorrow with no additional context, it would make the same decision and produce the same outcome
+
 ### Merge Decision
 - [ ] ✅ Approve
 - [ ] 🔄 Approve with comments
