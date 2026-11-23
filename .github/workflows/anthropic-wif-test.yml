@@ -1,5 +1,5 @@
 # TEMPORARY test of the Anthropic federation rule. Lives only on the throwaway branch agent/wif-test. Never merge to main.
-# Retry 2.
+# Retry 3: also prints the token's claims (payload only, never the signature) to see what the rule is matching against.
 name: anthropic-wif-test
 on:
   push:
@@ -19,6 +19,11 @@ jobs:
             const token = await core.getIDToken('https://api.anthropic.com');
             core.setSecret(token);
             core.exportVariable('JWT', token);
+            const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
+            const keep = ['iss','sub','aud','repository','repository_owner','repository_id','ref','ref_type','event_name','workflow','workflow_ref','job_workflow_ref','runner_environment','actor','environment'];
+            const out = {};
+            for (const k of keep) if (k in payload) out[k] = payload[k];
+            core.info('OIDC claims: ' + JSON.stringify(out, null, 2));
       - name: Exchange for an Anthropic access token
         run: |
           curl -sS https://api.anthropic.com/v1/oauth/token \
