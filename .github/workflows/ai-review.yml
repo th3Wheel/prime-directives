@@ -1,9 +1,12 @@
 # Reusable AI reviewer. Fills out the Pull Request Review Checklist as one PR comment, then marks the PR ready for
 # review only on a clean verdict (and back to draft otherwise). It never approves.
 #
-# THE RUBRIC LIVES HERE, in the prompt below, and nowhere else. It is the single standard every PR is reviewed against.
-# Every caller gets the same copy, and an agent cannot change it (workflow files are protected by CODEOWNERS).
-# To change the rubric, edit the prompt below via a PR the code owner approves.
+# WHERE THE RUBRIC LIVES: the checklist is NOT written here. It is taken from the PR template on the default branch of
+# the rubric repo (th3Wheel/prime-directives@main, .github/PULL_REQUEST_TEMPLATE.md), the single source for PR bodies and
+# review alike. Only the guidance for how to judge each item lives in the prompt below. Both are read from main, never
+# from the PR under review, and both are protected by CODEOWNERS, so an agent cannot change the standard it is judged by.
+# To change the checklist, edit the template; to change how items are judged, edit the prompt below. Either needs a PR the
+# code owner approves. A renamed or removed section fails loudly (.github/scripts/render-review-checklist.sh).
 #
 # Third-party actions are pinned to full commit SHAs (the trailing comment is the release); Dependabot keeps them current.
 #
@@ -33,6 +36,14 @@ on:
         description: Head commit being reviewed
         type: string
         required: true
+      rubric_repo:
+        description: Repo whose default branch holds the PR template and scripts the reviewer uses
+        type: string
+        default: th3Wheel/prime-directives
+      rubric_ref:
+        description: Ref of the rubric repo to read
+        type: string
+        default: main
       federation_rule_id:
         type: string
         default: fdrl_01Gjb2SQ7ZViDTJ5cVzNET3o
@@ -45,6 +56,10 @@ on:
       workspace_id:
         type: string
         default: wrkspc_01JcfaUaA6jpba2m3qGXa9rs
+    secrets:
+      rubric_token:
+        description: Only needed when the rubric repo is private and is not the calling repo. A token that can read its contents.
+        required: false
 
 jobs:
   review:
@@ -69,6 +84,24 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
+
+      # The standard: template and script from the rubric repo's main (the caller's own repo when it is the rubric repo).
+      # A private rubric repo called from another repo needs the optional rubric_token secret; the default token cannot read it.
+      - name: Check out the rubric repo (default branch)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: ${{ inputs.rubric_repo }}
+          ref: ${{ inputs.rubric_ref }}
+          path: .rubric
+          token: ${{ secrets.rubric_token || github.token }}
+          persist-credentials: false
+
+      - name: Build the checklist from the template
+        id: checklist
+        run: |
+          set -euo pipefail
+          text=$(TEMPLATE=.rubric/.github/PULL_REQUEST_TEMPLATE.md bash .rubric/.github/scripts/render-review-checklist.sh)
+          { echo 'text<<CHECKLIST_EOF'; echo "$text"; echo 'CHECKLIST_EOF'; } >> "$GITHUB_OUTPUT"
 
       - name: Fill out the review checklist
         uses: anthropics/claude-code-action@8251c103ac8c1d761882c86aba1412c7f583c844 # v1.0.213
@@ -104,59 +137,8 @@ jobs:
             - Inheritance test (Reproducibility item): answer with evidence, not a yes or no. Tick it only if the reasons, constraints and decisions behind the change are written down in the repo or the PR itself (code, AGENTS.md, docs, comments, PR description), so a fresh agent reading only those would reach the same result. Leave it unticked if the change depends on context that lives only in a chat, a session, a person's head, or an unstated assumption; name the missing context and where it should be recorded. Also note any step that would come out differently on a second run (unpinned versions, hidden environment, undocumented manual steps).
             - Changes to workflows, rulesets, CODEOWNERS or permissions must be called out in the description. Bots are never added to CODEOWNERS.
 
-            THE CHECKLIST
-            ## Pull Request Review Checklist
-
-            ### Functionality
-            - [ ] Meets requirements
-            - [ ] Handles expected edge cases
-            - [ ] No obvious bugs introduced
-            - [ ] One concern per PR, with no unrelated changes
-
-            ### Code Quality
-            - [ ] Code is readable and maintainable
-            - [ ] Naming is clear and consistent
-            - [ ] No unnecessary complexity or duplication
-            - [ ] Linters, formatters and type checks pass with no new warnings
-
-            ### Testing
-            - [ ] Relevant tests added or updated
-            - [ ] All tests pass
-            - [ ] Changes verified manually if needed
-            - [ ] CI is green on the current head commit
-
-            ### Security & Performance
-            - [ ] No secrets, credentials, or sensitive data committed
-            - [ ] Input validation and error handling reviewed
-            - [ ] No significant performance regressions
-            - [ ] No changes to workflows, rulesets, CODEOWNERS or permissions that aren't called out
-            - [ ] New dependencies are justified, pinned, in the lockfile, and under acceptable licenses
-
-            ### Documentation
-            - [ ] PR description clearly explains the change
-            - [ ] PR description has all required information (ticket or issue number, references) and covers every change in the diff, with no hidden changes
-            - [ ] Documentation/comments updated if needed
-            - [ ] Breaking changes are identified
-            - [ ] How to roll back is clear, with migration notes if needed
-
-            ### Production Risk Assessment
-            - [ ] At least three credible failure modes documented
-            - [ ] Every failure mode contains a Detection section
-            - [ ] Detection methods reference observable signals
-            - [ ] Failure modes are specific to this change
-            - [ ] Mitigations are actionable
-            - [ ] Recovery or rollback strategy exists
-
-            ### Review Items
-            - [ ] Every review comment, including Copilot overview-only notes, is fixed or answered
-
-            ### Reproducibility
-            - [ ] If another AI agent inherited this repository tomorrow with no additional context, it would make the same decision and produce the same outcome
-
-            ### Merge Decision
-            - [ ] ✅ Approve
-            - [ ] 🔄 Approve with comments
-            - [ ] ❌ Request changes
+            THE CHECKLIST (from the PR template on the rubric repo's default branch)
+            ${{ steps.checklist.outputs.text }}
 
             OUTPUT FORMAT
             Write the comment to a file and post it once with `gh pr comment ${{ env.PR }} --body-file <file>`. It must start with the marker line below, then the head commit (the first 12 characters of ${{ env.SHA }}), then the verdict, then the filled-in checklist with a note after each item, then the two lists:
