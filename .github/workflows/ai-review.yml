@@ -105,7 +105,8 @@ jobs:
 
       # Read-only. `gh pr view --comments` does not show inline review threads or whether they are resolved, so the
       # reviewer gets them as a file it can only Read. Being unable to read the threads is a departure from the spec:
-      # the job fails loudly (no skip, no empty fallback), including when the list is incomplete (more than 100 threads).
+      # the job fails loudly (no skip, no empty fallback), including when the export is incomplete (more than 100 threads,
+      # or a thread with more than 50 comments).
       - name: Save the review threads for the reviewer
         run: |
           set -euo pipefail
@@ -123,6 +124,7 @@ jobs:
                       line
                       resolvedBy { login }
                       comments(first: 50) {
+                        totalCount
                         nodes { databaseId author { login } body createdAt url }
                       }
                     }
@@ -130,11 +132,11 @@ jobs:
                 }
               }
             }' > "$GITHUB_WORKSPACE/.review-threads.json"
-          jq -e '(.errors // empty) | length == 0' "$GITHUB_WORKSPACE/.review-threads.json" > /dev/null \
+          jq -e '((.errors // []) | length) == 0' "$GITHUB_WORKSPACE/.review-threads.json" > /dev/null \
             || { echo "::error::The review thread query returned errors"; exit 1; }
-          jq -e '.data.repository.pullRequest.reviewThreads | (.nodes | type == "array") and (.totalCount <= 100)' \
+          jq -e '.data.repository.pullRequest.reviewThreads | (.nodes | type == "array") and (.totalCount <= 100) and all(.nodes[]; .comments.totalCount <= 50)' \
             "$GITHUB_WORKSPACE/.review-threads.json" > /dev/null \
-            || { echo "::error::Could not read every review thread (no thread list, or more than 100 threads)"; exit 1; }
+            || { echo "::error::Could not read every review thread (no thread list, more than 100 threads, or a thread with more than 50 comments)"; exit 1; }
 
       - name: Fill out the review checklist
         uses: anthropics/claude-code-action@8251c103ac8c1d761882c86aba1412c7f583c844 # v1.0.213
