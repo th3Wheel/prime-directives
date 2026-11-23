@@ -237,8 +237,6 @@ def test_non_object_lock_is_a_lock_error_not_a_traceback(
 
 
 @pytest.mark.parametrize("payload", ["[]", '"text"'])
-def test_non_object_master_settings_are_rejected(
-    release: Path, target: Path, payload: str
-) -> None:
+def test_non_object_master_settings_are_rejected(release: Path, target: Path, payload: str) -> None:
     (release / "master/settings.master.json").write_text(payload)
     assert run(release, "initialize", str(target)) == 1
