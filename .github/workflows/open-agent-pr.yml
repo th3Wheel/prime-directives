@@ -35,6 +35,7 @@ jobs:
           BRANCH: ${{ github.ref_name }}
           SHA: ${{ github.sha }}
           PUSHER: ${{ github.actor }}
+          RUN_ID: ${{ github.run_id }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           REVIEWER: th3Wheel
         run: |
@@ -97,7 +98,33 @@ jobs:
 
           ## Pull Request Review Checklist
 
-          An AI reviewer fills this out in a comment before human review (see .github/review-rubric.md). The PR is marked ready when its verdict is clean.
+          An AI reviewer fills out the sections below Human Oversight in a comment before human review (see .github/review-rubric.md). The PR is marked ready when its verdict is clean.
+
+          ### Agent Metadata
+
+          #### Author Type
+
+          - [ ] Human-authored
+          - [ ] AI-assisted
+          - [x] Agent-generated
+
+          #### Agent Information
+
+          | Field | Value |
+          |---------|---------|
+          | Agent Name | \`$PUSHER\` |
+          | Model | |
+          | Workflow | \`Open agent PR\` |
+          | Run ID | \`$RUN_ID\` |
+          | Task Source | |
+          | Issue / Ticket | |
+
+          #### Human Oversight
+
+          - [ ] Human reviewed implementation.
+          - [ ] Human reviewed tests.
+          - [ ] Human reviewed production risks.
+          - [ ] Human authorized merge readiness.
 
           ### Functionality
           - [ ] Meets requirements
