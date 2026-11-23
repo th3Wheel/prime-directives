@@ -5,6 +5,8 @@
 # Every caller gets the same copy, and an agent cannot change it (workflow files are protected by CODEOWNERS).
 # To change the rubric, edit the prompt below via a PR the code owner approves.
 #
+# Third-party actions are pinned to full commit SHAs (the trailing comment is the release); Dependabot keeps them current.
+#
 # Call it from any repo, with the caller granting the permissions below:
 #
 #   jobs:
@@ -63,13 +65,13 @@ jobs:
     steps:
       # Default branch only: the reviewer sees the base repo (AGENTS.md, config), never the agent's branch checked out.
       - name: Check out the default branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
       - name: Fill out the review checklist
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@8251c103ac8c1d761882c86aba1412c7f583c844 # v1.0.213
         with:
           anthropic_federation_rule_id: ${{ inputs.federation_rule_id }}
           anthropic_organization_id: ${{ inputs.organization_id }}
@@ -95,7 +97,7 @@ jobs:
             - PR description has all required information and covers every change: compare the diff against the description file by file. Tick only if (a) the description has the required information (a ticket or issue number where one exists, and references to the specs, decisions or sources the change relies on) and (b) every change in the diff is described. List any file or change the description does not mention, and any claim the diff does not back up. A single undescribed change, however small, leaves it unticked.
             - Linters, formatters and type checks (for Python: ruff and ty): base this on the PR's check results from `gh pr checks`. Tick only if they pass with no new warnings. If no linter runs on the changed files, tick it as N/A: no linter configured for <file types>. Never tick it from the diff alone, and never suggest disabling a rule to make it pass.
             - CI is green on the current head commit: use `gh pr checks` and confirm the results are for the current head commit. Tick only if every check passes. Pending, failed, cancelled or missing checks leave it unticked. Ignore the check for the Open agent PR workflow itself, which is the run producing this review.
-            - New dependencies: for any new or changed dependency (including GitHub Actions and their versions), is it justified in the description, pinned to an exact version, recorded in the lockfile, and under an acceptable license? Tick as N/A: no dependency changes if there are none.
+            - New dependencies: for any new or changed dependency (including GitHub Actions and their versions), is it justified in the description, pinned to an exact version (GitHub Actions to a full commit SHA), recorded in the lockfile, and under an acceptable license? Tick as N/A: no dependency changes if there are none.
             - How to roll back: is it clear how to undo the change, with migration or data notes where it cannot simply be reverted? For most changes, reverting the squash commit is enough: say so.
             - Every review comment: check every comment on the PR, including Copilot overview-only notes not attached to a line. Tick only if each is fixed or answered. If any is open, leave it unticked and name the comment.
             - Inheritance test (Reproducibility item): answer with evidence, not a yes or no. Tick it only if the reasons, constraints and decisions behind the change are written down in the repo or the PR itself (code, AGENTS.md, docs, comments, PR description), so a fresh agent reading only those would reach the same result. Leave it unticked if the change depends on context that lives only in a chat, a session, a person's head, or an unstated assumption; name the missing context and where it should be recorded. Also note any step that would come out differently on a second run (unpinned versions, hidden environment, undocumented manual steps).
