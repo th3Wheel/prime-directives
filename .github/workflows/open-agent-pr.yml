@@ -133,6 +133,50 @@ jobs:
           printf '%s\n**Your review checklist.** Tick these yourself; the AI review is the separate comment above or below, and nothing here is overwritten later.\n\n%s\n' "$marker" "$list" > "$RUNNER_TEMP/human.md"
           gh pr comment "$PR" --repo "$REPO" --body-file "$RUNNER_TEMP/human.md"
 
+  # Minimal guard against an agent changing the gate that judges its own PR. If the PR touches the review gate
+  # (workflows, scripts, the PR template, the rubric doc, CODEOWNERS, dependabot.yml), the AI review does not run and a
+  # ready PR goes back to draft, so only the code owner can pass it. This covers what an agent CAN push (the App cannot
+  # push .github/workflows/ at all). It does not stop a human pusher, and the ai-review.yml that runs is still the one
+  # on the pushed commit (full fix tabled: see the follow-up issue linked in the PR).
+  gate-guard:
+    needs: open-pr
+    if: needs.open-pr.outputs.number != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      touched: ${{ steps.check.outputs.touched }}
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Check whether the PR changes the review gate
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ needs.open-pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          files=$(gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[] | .filename, (.previous_filename // empty)')
+          hit=$(printf '%s\n' "$files" | grep -E '^(\.github/(workflows/|scripts/|PULL_REQUEST_TEMPLATE\.md$|review-rubric\.md$|CODEOWNERS$|dependabot\.yml$)|CODEOWNERS$|docs/CODEOWNERS$)' | sort -u || true)
+          if [ -z "$hit" ]; then
+            echo "touched=false" >> "$GITHUB_OUTPUT"
+            echo "PR #$PR does not touch the review gate"
+            exit 0
+          fi
+          echo "touched=true" >> "$GITHUB_OUTPUT"
+          echo "PR #$PR touches the review gate:"; echo "$hit"
+          # A PR that was already marked ready goes back to draft. Only an already-draft PR may skip this; any other failure fails the job.
+          if [ "$(gh pr view "$PR" --repo "$REPO" --json isDraft --jq .isDraft)" != true ]; then
+            gh pr ready "$PR" --repo "$REPO" --undo
+          fi
+          marker='<!-- gate-guard -->'
+          if gh api "repos/$REPO/issues/$PR/comments" --paginate | jq -s --arg m "$marker" 'any(.[][]; .body | contains($m))' | grep -qx true; then
+            echo "Gate comment already posted"; exit 0
+          fi
+          printf '%s\n**This PR changes the review gate, so there is no AI review.** An agent must not be able to change the rules or checks that judge its own PR. The AI review is skipped and the PR stays a draft until the code owner reviews it by hand. Files:\n\n%s\n' "$marker" "$(printf '%s\n' "$hit" | sed 's/^/- `/; s/$/`/')" > "$RUNNER_TEMP/gate.md"
+          gh pr comment "$PR" --repo "$REPO" --body-file "$RUNNER_TEMP/gate.md"
+
   # The agent has no Pull requests permission, so it cannot reply on review threads. It lists its decisions in the head
   # commit message ("Review comments:", one "- <comment id>: <text>" line each) and this job posts them with the workflow
   # token. Each reply carries a marker, so a re-run never posts one twice. Anything wrong (an id that is not a comment on
@@ -174,8 +218,8 @@ jobs:
 
   # Thin caller of the reusable reviewer. The federation IDs live in ai-review.yml as defaults.
   ai-review:
-    needs: open-pr
-    if: needs.open-pr.outputs.number != ''
+    needs: [open-pr, gate-guard]
+    if: needs.open-pr.outputs.number != '' && needs.gate-guard.outputs.touched == 'false'
     permissions:
       contents: read
       pull-requests: write

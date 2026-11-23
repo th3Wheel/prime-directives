@@ -6,6 +6,7 @@ Project rules for agents that change this repo. Workflows on `main` enforce most
 
 - Push your work to a branch named `agent/<type>-<slug>`, for example `agent/feat-ci-uv`. Stacked branches (gh stack) each get their own PR, based on the closest other `agent/**` branch.
 - Do not open the PR, edit its body or labels, mark it ready, approve it or merge it. A workflow opens a draft PR on every push from the template on `main`, then the AI reviewer runs. The PR becomes ready only on a clean review verdict. Thomas (`th3Wheel`) approves and merges.
+- A PR that changes the review gate (`.github/workflows/`, `.github/scripts/`, the PR template, `review-rubric.md`, CODEOWNERS, `dependabot.yml`) gets no AI review: a workflow skips it, posts a comment, and keeps the PR a draft for Thomas to review by hand. Agents cannot push workflow files at all.
 - The checklists are not in the PR body. The AI reviewer posts its checklist as one comment that it updates in place on every run, and a second comment holds Thomas's own checklist (oversight, sign-off, merge decision), posted once and never overwritten. The workflow token posts both. You cannot edit them, and you must not tick or touch the human one.
 - The PR body is generated. Everything in it that comes from you comes from your head commit message, so the head commit message must carry the whole description.
 
