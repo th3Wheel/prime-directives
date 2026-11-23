@@ -74,6 +74,55 @@ Complete if this PR was created or modified by an AI agent.
 - [ ] Breaking changes are identified
 - [ ] How to roll back is clear, with migration notes if needed
 
+### Production Risk Assessment
+
+> Required for all pull requests.
+>
+> Mandatory for agent-created PRs.
+
+#### How This Could Fail in Production
+
+Document at least three realistic production failure modes introduced or affected by this change.
+
+##### Failure Mode 1
+
+**Scenario**
+
+**Impact**
+
+**Detection**
+
+**Mitigation**
+
+##### Failure Mode 2
+
+**Scenario**
+
+**Impact**
+
+**Detection**
+
+**Mitigation**
+
+##### Failure Mode 3
+
+**Scenario**
+
+**Impact**
+
+**Detection**
+
+**Mitigation**
+
+#### Author Confirmation
+
+- [ ] At least three credible failure modes documented.
+- [ ] Every failure mode contains a Detection section.
+- [ ] Detection methods reference observable signals.
+- [ ] Failure modes are specific to this change.
+- [ ] Mitigations are actionable.
+- [ ] Recovery or rollback strategy exists.
+
 ### Review Items
 - [ ] Every review comment, including Copilot overview-only notes, is fixed or answered
 
