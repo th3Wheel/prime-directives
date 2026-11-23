@@ -1,4 +1,4 @@
-# Keeps the SHA-pinned GitHub Actions in .github/workflows up to date. Each update is a PR the code owner reviews.
+# Keeps the version-pinned GitHub Actions in .github/workflows up to date. Each update is a PR the code owner reviews.
 version: 2
 updates:
   - package-ecosystem: github-actions

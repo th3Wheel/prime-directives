@@ -95,7 +95,7 @@ comment, updated in place on every run (see .github/review-rubric.md). -->
 - [ ] Input validation and error handling reviewed
 - [ ] No significant performance regressions
 - [ ] No changes to workflows, rulesets, CODEOWNERS or permissions that aren't called out
-- [ ] New dependencies are justified, pinned, in the lockfile, and under acceptable licenses
+- [ ] New dependencies are justified, pinned to a version, in the project's lockfile where one exists, and under acceptable licenses
 
 ### Documentation
 - [ ] PR description clearly explains the change

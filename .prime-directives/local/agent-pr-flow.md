@@ -54,7 +54,7 @@ The checklist is the one in `.github/PULL_REQUEST_TEMPLATE.md` on `main`. In pra
 
 - The description covers every change in the diff, with no hidden changes. One concern per PR.
 - CI is green on the head commit. Linters, formatters and type checks pass with no new warnings.
-- New dependencies are justified and pinned. GitHub Actions are pinned to a full commit SHA, and recorded in the lockfile once one exists.
+- New dependencies are justified and pinned. GitHub Actions are pinned to a full version tag (for example `actions/checkout@v4.4.0`), not a commit SHA, a branch or a floating major like `v4`. Dependabot keeps them current. There is no Actions lockfile yet.
 - Changes to workflows, rulesets, CODEOWNERS or permissions are called out in the description.
 - The Production risk section is complete (see above).
 - Every review comment, including Copilot overview-only notes, has a decision on its thread: an obvious bug fix implemented and answered on its thread, or a reply that challenges or asks and waits for the code owner's approval (see Review comments below). Thomas will not approve a PR with an unanswered comment.
