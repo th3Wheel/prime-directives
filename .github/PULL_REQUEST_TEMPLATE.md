@@ -12,7 +12,35 @@
 
 ## Pull Request Review Checklist
 
-<!-- An AI reviewer fills this out in a comment before human review. See .github/review-rubric.md. -->
+<!-- An AI reviewer fills out the sections below Human Oversight in a comment before human review. See .github/review-rubric.md. -->
+
+### Agent Metadata
+
+Complete if this PR was created or modified by an AI agent.
+
+#### Author Type
+
+- [ ] Human-authored
+- [ ] AI-assisted
+- [ ] Agent-generated
+
+#### Agent Information
+
+| Field | Value |
+|---------|---------|
+| Agent Name | |
+| Model | |
+| Workflow | |
+| Run ID | |
+| Task Source | |
+| Issue / Ticket | |
+
+#### Human Oversight
+
+- [ ] Human reviewed implementation.
+- [ ] Human reviewed tests.
+- [ ] Human reviewed production risks.
+- [ ] Human authorized merge readiness.
 
 ### Functionality
 - [ ] Meets requirements
