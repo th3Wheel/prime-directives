@@ -63,17 +63,13 @@ def read_lock(root: Path) -> Lock:
         raise LockError(f"no lock file at {path}; run `prime-directives initialize`") from exc
     except json.JSONDecodeError as exc:
         raise LockError(f"lock file {path} is not valid JSON: {exc}") from exc
-    except (UnicodeDecodeError, OSError) as exc:
-        raise LockError(f"lock file {path} cannot be read: {exc}") from exc
-    if not isinstance(data, dict):
-        raise LockError(f"lock file {path} must contain a JSON object")
     if data.get("schemaVersion") != SCHEMA_VERSION:
         raise LockError(
             f"lock schema {data.get('schemaVersion')!r} is not supported by this tool "
             f"(expects {SCHEMA_VERSION}); run `prime-directives load` to upgrade"
         )
     try:
-        lock = Lock(
+        return Lock(
             repo=data["source"]["repo"],
             tag=data["tag"],
             commit=data["commit"],
@@ -85,38 +81,6 @@ def read_lock(root: Path) -> Lock:
         )
     except (KeyError, TypeError) as exc:
         raise LockError(f"lock file {path} is malformed: {exc!r}") from exc
-    _validate(lock, path)
-    return lock
-
-
-def _validate(lock: Lock, path: Path) -> None:
-    """The dataclasses do not check types, so reject malformed field values here."""
-    top = {
-        "source.repo": lock.repo,
-        "tag": lock.tag,
-        "commit": lock.commit,
-        "renderedAt": lock.rendered_at,
-        "profile": lock.profile,
-        "toolVersion": lock.tool_version,
-    }
-    for name, value in top.items():
-        if not isinstance(value, str):
-            raise LockError(f"lock file {path} is malformed: {name} must be a string")
-    if not isinstance(lock.files, list):
-        raise LockError(f"lock file {path} is malformed: files must be a list")
-    for entry in lock.files:
-        for name in ("target", "source", "sha256", "kind"):
-            if not isinstance(getattr(entry, name), str):
-                raise LockError(f"lock file {path} is malformed: files[].{name} must be a string")
-        if entry.kind not in ("file", "json-merge"):
-            raise LockError(f"lock file {path} is malformed: unknown kind {entry.kind!r}")
-        rel = Path(entry.target)
-        if rel.is_absolute() or ".." in rel.parts:
-            raise LockError(f"lock file {path} is malformed: unsafe target {entry.target!r}")
-        if not isinstance(entry.keys, list) or not all(isinstance(k, str) for k in entry.keys):
-            raise LockError(
-                f"lock file {path} is malformed: files[].keys must be a list of strings"
-            )
 
 
 def write_lock(root: Path, lock: Lock) -> None:

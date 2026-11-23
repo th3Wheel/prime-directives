@@ -49,17 +49,6 @@ def _source(args: argparse.Namespace, repo: str):
     return GitHubSource(repo)
 
 
-def _locked_repo(args: argparse.Namespace, root: Path) -> str:
-    """Existing lock decides the repo; a different --repo would mix two sources."""
-    locked = read_lock(root).repo
-    if args.repo and args.repo != locked:
-        raise DeployError(
-            f"--repo {args.repo} differs from the locked repo {locked}; "
-            "a pinned repo cannot be switched here"
-        )
-    return locked
-
-
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     repo = args.repo or DEFAULT_REPO
@@ -73,7 +62,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command in ("render", "load", "self"):
             root = args.path.resolve()
             if args.command != "self":
-                repo = _locked_repo(args, root)
+                repo = args.repo or read_lock(root).repo
             if args.command == "render":
                 lock, diff = render(root, _source(args, repo))
             elif args.command == "load":
@@ -83,7 +72,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"pinned at {lock.tag}")
         else:
             root = args.path.resolve()
-            repo = _locked_repo(args, root)
+            repo = args.repo or read_lock(root).repo
             result = scan(root, _source(args, repo), args.min_version)
             for line in result.problems:
                 print(f"FAIL: {line}")
