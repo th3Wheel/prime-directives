@@ -177,6 +177,13 @@ jobs:
             echo "Clean verdict for ${head:0:12}: marking PR #$PR ready for review"
             gh pr ready "$PR" --repo "$REPO"
           else
-            echo "No clean verdict for ${head:0:12}: leaving PR #$PR as a draft"
-            gh pr ready "$PR" --repo "$REPO" --undo || true
+            echo "No clean verdict for ${head:0:12}: making sure PR #$PR is a draft"
+            # Only an already-draft PR may skip the revert. Any other failure must fail the job,
+            # so a failed revert can never leave a ready PR looking reviewed.
+            is_draft=$(gh pr view "$PR" --repo "$REPO" --json isDraft --jq .isDraft)
+            if [ "$is_draft" = true ]; then
+              echo "PR #$PR is already a draft"
+            else
+              gh pr ready "$PR" --repo "$REPO" --undo
+            fi
           fi

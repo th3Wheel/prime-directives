@@ -164,7 +164,16 @@ jobs:
           ### Reproducibility
           - [ ] If another AI agent inherited this repository tomorrow with no additional context, it would make the same decision and produce the same outcome
 
+          ### Reviewer Sign-Off
+
+          - [ ] Functionality reviewed.
+          - [ ] Testing reviewed.
+          - [ ] Security reviewed.
+          - [ ] Production risks reviewed.
+          - [ ] Safe to merge.
+
           ### Merge Decision
+
           - [ ] ✅ Approve
           - [ ] 🔄 Approve with comments
           - [ ] ❌ Request changes

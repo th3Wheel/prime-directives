@@ -82,7 +82,7 @@ Complete if this PR was created or modified by an AI agent.
 
 #### How This Could Fail in Production
 
-Document at least three realistic production failure modes introduced or affected by this change.
+Document at least three realistic production failure modes introduced or affected by this change. Detection is required for every failure mode: name the observable signal (alert, log line, metric, failing check) that would show it, because fast detection sets time-to-recovery.
 
 ##### Failure Mode 1
 
@@ -90,7 +90,7 @@ Document at least three realistic production failure modes introduced or affecte
 
 **Impact**
 
-**Detection**
+**Detection** (required)
 
 **Mitigation**
 
@@ -100,7 +100,7 @@ Document at least three realistic production failure modes introduced or affecte
 
 **Impact**
 
-**Detection**
+**Detection** (required)
 
 **Mitigation**
 
@@ -110,7 +110,7 @@ Document at least three realistic production failure modes introduced or affecte
 
 **Impact**
 
-**Detection**
+**Detection** (required)
 
 **Mitigation**
 
@@ -129,7 +129,16 @@ Document at least three realistic production failure modes introduced or affecte
 ### Reproducibility
 - [ ] If another AI agent inherited this repository tomorrow with no additional context, it would make the same decision and produce the same outcome
 
+### Reviewer Sign-Off
+
+- [ ] Functionality reviewed.
+- [ ] Testing reviewed.
+- [ ] Security reviewed.
+- [ ] Production risks reviewed.
+- [ ] Safe to merge.
+
 ### Merge Decision
+
 - [ ] ✅ Approve
 - [ ] 🔄 Approve with comments
 - [ ] ❌ Request changes
