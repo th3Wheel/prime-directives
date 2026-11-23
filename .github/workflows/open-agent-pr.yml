@@ -65,7 +65,10 @@ jobs:
           msg=$(gh api "repos/$REPO/commits/$SHA" --jq .commit.message)
           headline=$(printf '%s\n' "$msg" | head -n1 | clean 72)
           [ -n "$headline" ] || headline="(no commit message)"
-          summary=$(printf '%s\n' "$msg" | tail -n +3 | grep -v '^Agent-Session:' | head -n 30 | clean 1500 || true)
+          # Message body without trailers. The agent's "Production risk:" section, if any, runs to the end of the body.
+          msg_body=$(printf '%s\n' "$msg" | tail -n +3 | grep -vE '^(Agent-Session|Co-Authored-By|Claude-Session):' || true)
+          summary=$(printf '%s\n' "$msg_body" | awk '/^Production risk:/{exit} {print}' | head -n 30 | clean 1500 || true)
+          risk=$(printf '%s\n' "$msg_body" | awk 'f{print} /^Production risk:/{f=1}' | head -n 60 | clean 3000 || true)
           session=$(printf '%s\n' "$msg" | sed -n 's/^Agent-Session:[[:space:]]*//p' | tail -n1)
           if printf '%s' "$session" | grep -Eq '^[A-Za-z0-9:/._#-]{1,200}$'; then session_txt="\`$session\`"
           else session_txt="_missing or invalid (expected an \`Agent-Session:\` commit trailer)_"; fi
@@ -90,6 +93,11 @@ jobs:
           ### Agent's description (quoted, unverified)
           ~~~text
           ${summary:-(none provided)}
+          ~~~
+
+          ### Production risk (quoted from the commit message, unverified)
+          ~~~text
+          ${risk:-(none provided: the commit message needs a "Production risk:" section, see .github/review-rubric.md)}
           ~~~
 
           ## Rollback
@@ -157,6 +165,14 @@ jobs:
           - [ ] Documentation/comments updated if needed
           - [ ] Breaking changes are identified
           - [ ] How to roll back is clear, with migration notes if needed
+
+          ### Production Risk Assessment
+          - [ ] At least three credible failure modes documented
+          - [ ] Every failure mode contains a Detection section
+          - [ ] Detection methods reference observable signals
+          - [ ] Failure modes are specific to this change
+          - [ ] Mitigations are actionable
+          - [ ] Recovery or rollback strategy exists
 
           ### Review Items
           - [ ] Every review comment, including Copilot overview-only notes, is fixed or answered
