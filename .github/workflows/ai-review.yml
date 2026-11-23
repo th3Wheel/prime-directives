@@ -1,8 +1,9 @@
 # Reusable AI reviewer. Fills out the Pull Request Review Checklist as one PR comment, then marks the PR ready for
 # review only on a clean verdict (and back to draft otherwise). It never approves.
 #
-# The rubric the reviewer follows is built into the prompt below, so every caller gets the same copy and callers need no
-# rubric file. .github/review-rubric.md in the host repo is the human-readable version: keep the two in sync.
+# THE RUBRIC LIVES HERE, in the prompt below, and nowhere else. It is the single standard every PR is reviewed against.
+# Every caller gets the same copy, and an agent cannot change it (workflow files are protected by CODEOWNERS).
+# To change the rubric, edit the prompt below via a PR the code owner approves.
 #
 # Call it from any repo, with the caller granting the permissions below:
 #
