@@ -1,6 +1,7 @@
-# When an agent pushes agent/** (incl. gh stack branches), open the PR as a DRAFT from a FIXED template,
+# When an agent pushes agent/** (incl. gh stack branches), open the PR as a DRAFT with a body rendered from the PR template,
 # then call the reusable AI reviewer (ai-review.yml), which fills out the checklist in .github/review-rubric.md
 # and marks the PR ready only on a clean verdict.
+# The template (.github/PULL_REQUEST_TEMPLATE.md on main) is the single source; the renderer script fills only a few fields.
 # Agent-written text (commit message, trailer) is only ever shown as quoted, sanitized, length-capped data.
 # Enforcement lives outside the agent: this file is on main (CODEOWNERS: Thomas), the App has no Workflows
 # permission and (in the hybrid) no Pull requests permission, so the agent can't alter the template or edit the PR.
@@ -27,7 +28,15 @@ jobs:
     outputs:
       number: ${{ steps.open.outputs.number }}
     steps:
-      - name: Open PR (fixed template) and comment
+      # Default branch only: the PR body is rendered from the template and script on main, never from the agent's branch,
+      # so an agent cannot change what its own PR body says.
+      - name: Check out the default branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Open PR (from the template) and comment
         id: open
         env:
           GH_TOKEN: ${{ github.token }}
@@ -77,126 +86,11 @@ jobs:
                    --jq '"\(.ahead_by) commit(s), \(.files | length) file(s), +\([.files[].additions]|add // 0) -\([.files[].deletions]|add // 0)"')
 
           title="[agent] $headline"
-          body=$(cat <<BODY
-          ## Agent change
-
-          | | |
-          |---|---|
-          | Branch | \`$BRANCH\` |
-          | Base | \`$BASE\` |
-          | Pushed by | \`$PUSHER\` |
-          | Head commit | \`${SHA:0:12}\` |
-          | Size | $stat |
-          | Session | $session_txt |
-          | Opened by | [workflow run]($RUN_URL) |
-
-          ### Agent's description (quoted, unverified)
-          ~~~text
-          ${summary:-(none provided)}
-          ~~~
-
-          ### Production risk (quoted from the commit message, unverified)
-          ~~~text
-          ${risk:-(none provided: the commit message needs a "Production risk:" section, see .github/review-rubric.md)}
-          ~~~
-
-          ## Rollback
-
-          Revert the squash commit unless the description says otherwise.
-
-          ## Pull Request Review Checklist
-
-          An AI reviewer fills out the sections below Human Oversight in a comment before human review (see .github/review-rubric.md). The PR is marked ready when its verdict is clean.
-
-          ### Agent Metadata
-
-          #### Author Type
-
-          - [ ] Human-authored
-          - [ ] AI-assisted
-          - [x] Agent-generated
-
-          #### Agent Information
-
-          | Field | Value |
-          |---------|---------|
-          | Agent Name | \`$PUSHER\` |
-          | Model | |
-          | Workflow | \`Open agent PR\` |
-          | Run ID | \`$RUN_ID\` |
-          | Task Source | |
-          | Issue / Ticket | |
-
-          #### Human Oversight
-
-          - [ ] Human reviewed implementation.
-          - [ ] Human reviewed tests.
-          - [ ] Human reviewed production risks.
-          - [ ] Human authorized merge readiness.
-
-          ### Functionality
-          - [ ] Meets requirements
-          - [ ] Handles expected edge cases
-          - [ ] No obvious bugs introduced
-          - [ ] One concern per PR, with no unrelated changes
-
-          ### Code Quality
-          - [ ] Code is readable and maintainable
-          - [ ] Naming is clear and consistent
-          - [ ] No unnecessary complexity or duplication
-          - [ ] Linters, formatters and type checks pass with no new warnings
-
-          ### Testing
-          - [ ] Relevant tests added or updated
-          - [ ] All tests pass
-          - [ ] Changes verified manually if needed
-          - [ ] CI is green on the current head commit
-
-          ### Security & Performance
-          - [ ] No secrets, credentials, or sensitive data committed
-          - [ ] Input validation and error handling reviewed
-          - [ ] No significant performance regressions
-          - [ ] No changes to workflows, rulesets, CODEOWNERS or permissions that aren't called out
-          - [ ] New dependencies are justified, pinned, in the lockfile, and under acceptable licenses
-
-          ### Documentation
-          - [ ] PR description clearly explains the change
-          - [ ] PR description has all required information (ticket or issue number, references) and covers every change in the diff, with no hidden changes
-          - [ ] Documentation/comments updated if needed
-          - [ ] Breaking changes are identified
-          - [ ] How to roll back is clear, with migration notes if needed
-
-          ### Production Risk Assessment
-          - [ ] At least three credible failure modes documented
-          - [ ] Every failure mode contains a Detection section
-          - [ ] Detection methods reference observable signals
-          - [ ] Failure modes are specific to this change
-          - [ ] Mitigations are actionable
-          - [ ] Recovery or rollback strategy exists
-
-          ### Review Items
-          - [ ] Every review comment, including Copilot overview-only notes, is fixed or answered
-
-          ### Reproducibility
-          - [ ] If another AI agent inherited this repository tomorrow with no additional context, it would make the same decision and produce the same outcome
-
-          ### Reviewer Sign-Off
-
-          - [ ] Functionality reviewed.
-          - [ ] Testing reviewed.
-          - [ ] Security reviewed.
-          - [ ] Production risks reviewed.
-          - [ ] Safe to merge.
-
-          ### Merge Decision
-
-          - [ ] ✅ Approve
-          - [ ] 🔄 Approve with comments
-          - [ ] ❌ Request changes
-
-          Merges only with approval from @$REVIEWER (squash). If Base is not main, this PR is part of a stack: merge from the bottom up.
-          BODY
-          )
+          # The body is rendered from .github/PULL_REQUEST_TEMPLATE.md on the default branch (the single source).
+          # The script adds the Agent change table and fills only the spots it documents.
+          body=$(TEMPLATE=.github/PULL_REQUEST_TEMPLATE.md SHA_SHORT="${SHA:0:12}" SESSION_TXT="$session_txt" STAT="$stat" \
+                   SUMMARY="$summary" RISK="$risk" BASE="$BASE" \
+                   bash .github/scripts/render-agent-pr-body.sh)
           url=$(gh pr create --repo "$REPO" --base "$BASE" --head "$BRANCH" \
                   --title "$title" --body "$body" --reviewer "$REVIEWER" --draft)
           num=${url##*/}
