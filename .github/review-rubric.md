@@ -4,7 +4,9 @@ Every PR carries the **Pull Request Review Checklist** below. An AI reviewer fil
 
 ## How it runs
 
-For agent PRs, the `Open agent PR` workflow opens the PR as a draft with the blank checklist in its description, then calls the reusable workflow `.github/workflows/ai-review.yml`. That runs Claude Code Action as a read-only reviewer against this file as it exists on the default branch (an agent cannot edit its own rubric). It posts the filled checklist as one comment. If the verdict is **Ready for human review** for the current head commit, the workflow marks the PR ready for review; otherwise the PR stays (or goes back to) draft.
+For agent PRs, the `Open agent PR` workflow opens the PR as a draft with the blank checklist in its description, then calls the reusable workflow `.github/workflows/ai-review.yml`. That runs Claude Code Action as a read-only reviewer. It posts the filled checklist as one comment. If the verdict is **Ready for human review** for the current head commit, the workflow marks the PR ready for review; otherwise the PR stays (or goes back to) draft.
+
+**The rubric the reviewer follows is built into `ai-review.yml`**, so there is one shared copy and callers need no rubric file. An agent cannot edit it, because workflow files are protected by CODEOWNERS. This document is the human-readable version: when you change the rubric, change it in both places so they stay in sync.
 
 The reviewer authenticates to Anthropic with workload identity federation (a short-lived GitHub Actions OIDC token exchanged for an Anthropic token), so there is no API key to store or rotate. The federation IDs are identifiers, not secrets, so they are defaults inside `ai-review.yml` and no repository variables or secrets are needed.
 
@@ -12,7 +14,6 @@ Other repos can reuse it by calling `th3Wheel/prime-directives/.github/workflows
 
 - While this repo is private, set Settings, Actions, General, Access to "Accessible from repositories owned by th3Wheel".
 - The federation rule matches the caller's token claims (`repository_owner`, `ref`, `event_name`), not this repo's.
-- The rubric is read from the caller's default branch, because the job's token cannot read another private repo. Each caller keeps a copy of `.github/review-rubric.md`.
 
 ## How to fill it out
 
