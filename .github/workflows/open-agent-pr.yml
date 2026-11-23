@@ -1,8 +1,11 @@
-# DRAFT. Install as .github/workflows/open-agent-pr.yml via a PR that Thomas approves.
-# When an agent pushes agent/** (incl. gh stack branches), open the PR and post the comment from a FIXED template.
+# When an agent pushes agent/** (incl. gh stack branches), open the PR as a DRAFT with a body rendered from the PR template,
+# then call the reusable AI reviewer (ai-review.yml), which fills out the checklist in .github/review-rubric.md
+# and marks the PR ready only on a clean verdict.
+# The template (.github/PULL_REQUEST_TEMPLATE.md on main) is the single source; the renderer script fills only a few fields.
 # Agent-written text (commit message, trailer) is only ever shown as quoted, sanitized, length-capped data.
 # Enforcement lives outside the agent: this file is on main (CODEOWNERS: Thomas), the App has no Workflows
 # permission and (in the hybrid) no Pull requests permission, so the agent can't alter the template or edit the PR.
+# The AI review is a comment only. It never approves, and bots are never code owners.
 name: Open agent PR
 on:
   push:
@@ -10,7 +13,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write   # gh pr create / comment / label only; nothing approves
 
 concurrency:
   group: open-agent-pr-${{ github.ref }}
@@ -20,20 +22,39 @@ jobs:
   open-pr:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write   # gh pr create / comment / label only; nothing approves
+    outputs:
+      number: ${{ steps.open.outputs.number }}
     steps:
-      - name: Open PR (fixed template) and comment
+      # Default branch only: the PR body is rendered from the template and script on main, never from the agent's branch,
+      # so an agent cannot change what its own PR body says.
+      - name: Check out the default branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Open PR (from the template) and comment
+        id: open
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           BRANCH: ${{ github.ref_name }}
           SHA: ${{ github.sha }}
           PUSHER: ${{ github.actor }}
+          RUN_ID: ${{ github.run_id }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           REVIEWER: th3Wheel
         run: |
           set -euo pipefail
           existing=$(gh pr list --repo "$REPO" --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
-          if [ -n "$existing" ]; then echo "PR #$existing already open for $BRANCH"; exit 0; fi
+          if [ -n "$existing" ]; then
+            echo "PR #$existing already open for $BRANCH"
+            echo "number=$existing" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           # Stacked PRs: base = the closest other agent/** branch whose tip is an ancestor of this commit and
           # not already in main; otherwise main. Works when a stack's branches are pushed at the same time.
@@ -53,7 +74,11 @@ jobs:
           msg=$(gh api "repos/$REPO/commits/$SHA" --jq .commit.message)
           headline=$(printf '%s\n' "$msg" | head -n1 | clean 72)
           [ -n "$headline" ] || headline="(no commit message)"
-          summary=$(printf '%s\n' "$msg" | tail -n +3 | grep -v '^Agent-Session:' | head -n 30 | clean 1500 || true)
+          # Message body without trailers. Order in the message: description, "Production risk:", "Review comments:", trailers.
+          # The "Production risk:" section runs to "Review comments:" (or the end); the replies are posted by the reply-to-comments job.
+          msg_body=$(printf '%s\n' "$msg" | tail -n +3 | grep -vE '^(Agent-Session|Co-Authored-By|Claude-Session):' || true)
+          summary=$(printf '%s\n' "$msg_body" | awk '/^(Production risk|Review comments):/{exit} {print}' | head -n 30 | clean 1500 || true)
+          risk=$(printf '%s\n' "$msg_body" | awk '/^Review comments:/{f=0} f{print} /^Production risk:/{f=1}' | head -n 60 | clean 3000 || true)
           session=$(printf '%s\n' "$msg" | sed -n 's/^Agent-Session:[[:space:]]*//p' | tail -n1)
           if printf '%s' "$session" | grep -Eq '^[A-Za-z0-9:/._#-]{1,200}$'; then session_txt="\`$session\`"
           else session_txt="_missing or invalid (expected an \`Agent-Session:\` commit trailer)_"; fi
@@ -62,35 +87,147 @@ jobs:
                    --jq '"\(.ahead_by) commit(s), \(.files | length) file(s), +\([.files[].additions]|add // 0) -\([.files[].deletions]|add // 0)"')
 
           title="[agent] $headline"
-          body=$(cat <<BODY
-          ## Agent change
-
-          | | |
-          |---|---|
-          | Branch | \`$BRANCH\` |
-          | Base | \`$BASE\` |
-          | Pushed by | \`$PUSHER\` |
-          | Head commit | \`${SHA:0:12}\` |
-          | Size | $stat |
-          | Session | $session_txt |
-          | Opened by | [workflow run]($RUN_URL) |
-
-          ### Agent's description (quoted, unverified)
-          ~~~text
-          ${summary:-(none provided)}
-          ~~~
-
-          ### Reviewer checklist
-          - [ ] Diff matches the description above
-          - [ ] No changes to CI, rulesets, CODEOWNERS or secrets that aren't called out
-          - [ ] Checks are green (once CI exists)
-
-          Merges only with approval from @$REVIEWER (squash). If Base is not main, this PR is part of a stack: merge from the bottom up.
-          BODY
-          )
+          # The body is rendered from .github/PULL_REQUEST_TEMPLATE.md on the default branch (the single source).
+          # The script adds the Agent change table and fills only the spots it documents.
+          body=$(TEMPLATE=.github/PULL_REQUEST_TEMPLATE.md SHA_SHORT="${SHA:0:12}" SESSION_TXT="$session_txt" STAT="$stat" \
+                   SUMMARY="$summary" RISK="$risk" BASE="$BASE" \
+                   bash .github/scripts/render-agent-pr-body.sh)
           url=$(gh pr create --repo "$REPO" --base "$BASE" --head "$BRANCH" \
-                  --title "$title" --body "$body" --reviewer "$REVIEWER" --draft=false)
+                  --title "$title" --body "$body" --reviewer "$REVIEWER" --draft)
           num=${url##*/}
+          echo "number=$num" >> "$GITHUB_OUTPUT"
           gh label create agent --repo "$REPO" --color 5319e7 --description "Opened for an agent push" 2>/dev/null || true
           gh pr edit "$num" --repo "$REPO" --add-label agent || true
           gh pr comment "$num" --repo "$REPO" --body "Opened by workflow for push \`${SHA:0:12}\` by \`$PUSHER\`. The title, description and this comment are generated by the repo's workflow, not written by the agent. Run: $RUN_URL"
+
+  # Posted once, as its own comment, for the code owner to tick. It is never overwritten: a run that finds the marker does
+  # nothing, so the ticks survive later pushes. The workflow token posts it, so agents (the App has no PR or issues write)
+  # cannot edit it. Rendered from the template, the single source.
+  human-checklist:
+    needs: open-pr
+    if: needs.open-pr.outputs.number != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Check out the default branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Post the human review checklist once
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ needs.open-pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          marker='<!-- human-review-checklist -->'
+          if gh api "repos/$REPO/issues/$PR/comments" --paginate | jq -s --arg m "$marker" 'any(.[][]; .body | contains($m))' | grep -qx true; then
+            echo "Human review checklist already posted on PR #$PR"
+            exit 0
+          fi
+          list=$(TEMPLATE=.github/PULL_REQUEST_TEMPLATE.md bash .github/scripts/render-human-checklist.sh)
+          printf '%s\n**Your review checklist.** Tick these yourself; the AI review is the separate comment above or below, and nothing here is overwritten later.\n\n%s\n' "$marker" "$list" > "$RUNNER_TEMP/human.md"
+          gh pr comment "$PR" --repo "$REPO" --body-file "$RUNNER_TEMP/human.md"
+
+  # Minimal guard against an agent changing the gate that judges its own PR. If the PR touches the review gate
+  # (workflows, scripts, the PR template, the rubric doc, CODEOWNERS, dependabot.yml), the AI review does not run and a
+  # ready PR goes back to draft, so only the code owner can pass it. This covers what an agent CAN push (the App cannot
+  # push .github/workflows/ at all). It does not stop a human pusher, and the ai-review.yml that runs is still the one
+  # on the pushed commit (full fix tabled: see the follow-up issue linked in the PR).
+  gate-guard:
+    needs: open-pr
+    if: needs.open-pr.outputs.number != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      touched: ${{ steps.check.outputs.touched }}
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Check whether the PR changes the review gate
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ needs.open-pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          files=$(gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[] | .filename, (.previous_filename // empty)')
+          hit=$(printf '%s\n' "$files" | grep -E '^(\.github/(workflows/|scripts/|PULL_REQUEST_TEMPLATE\.md$|review-rubric\.md$|CODEOWNERS$|dependabot\.yml$)|CODEOWNERS$|docs/CODEOWNERS$)' | sort -u || true)
+          if [ -z "$hit" ]; then
+            echo "touched=false" >> "$GITHUB_OUTPUT"
+            echo "PR #$PR does not touch the review gate"
+            exit 0
+          fi
+          echo "touched=true" >> "$GITHUB_OUTPUT"
+          echo "PR #$PR touches the review gate:"; echo "$hit"
+          # A PR that was already marked ready goes back to draft. Only an already-draft PR may skip this; any other failure fails the job.
+          if [ "$(gh pr view "$PR" --repo "$REPO" --json isDraft --jq .isDraft)" != true ]; then
+            gh pr ready "$PR" --repo "$REPO" --undo
+          fi
+          marker='<!-- gate-guard -->'
+          if gh api "repos/$REPO/issues/$PR/comments" --paginate | jq -s --arg m "$marker" 'any(.[][]; .body | contains($m))' | grep -qx true; then
+            echo "Gate comment already posted"; exit 0
+          fi
+          printf '%s\n**This PR changes the review gate, so there is no AI review.** An agent must not be able to change the rules or checks that judge its own PR. The AI review is skipped and the PR stays a draft until the code owner reviews it by hand. Files:\n\n%s\n' "$marker" "$(printf '%s\n' "$hit" | sed 's/^/- `/; s/$/`/')" > "$RUNNER_TEMP/gate.md"
+          gh pr comment "$PR" --repo "$REPO" --body-file "$RUNNER_TEMP/gate.md"
+
+  # The agent has no Pull requests permission, so it cannot reply on review threads. It lists its decisions in the head
+  # commit message ("Review comments:", one "- <comment id>: <text>" line each) and this job posts them with the workflow
+  # token. Each reply carries a marker, so a re-run never posts one twice. Anything wrong (an id that is not a comment on
+  # this PR, a failed API call) fails the job loudly.
+  reply-to-comments:
+    needs: open-pr
+    if: needs.open-pr.outputs.number != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Post the agent's review-comment replies from the head commit message
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ needs.open-pr.outputs.number }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          msg=$(gh api "repos/$REPO/commits/$SHA" --jq .commit.message)
+          section=$(printf '%s\n' "$msg" | grep -vE '^(Agent-Session|Co-Authored-By|Claude-Session):' \
+                      | awk '/^Production risk:/{f=0} f{print} /^Review comments:/{f=1}' \
+                      | LC_ALL=C tr -cd '[:print:]\n' | tr -d '`~' | head -n 60 || true)
+          if [ -z "$(printf '%s' "$section" | tr -d '[:space:]')" ]; then echo "No Review comments section in the head commit"; exit 0; fi
+          comments=$(gh api "repos/$REPO/pulls/$PR/comments" --paginate | jq -s '[.[][]]')
+          while IFS= read -r line; do
+            [[ $line =~ ^-\ ([0-9]+):\ (.+)$ ]] || { [ -z "${line//[[:space:]]/}" ] || echo "Skipping a line that is not '- <id>: <text>'"; continue; }
+            id=${BASH_REMATCH[1]}; text=$(printf '%s' "${BASH_REMATCH[2]}" | cut -c1-600)
+            jq -e --argjson id "$id" 'any(.[]; .id == $id)' <<<"$comments" > /dev/null \
+              || { echo "::error::Review comment $id is not on PR #$PR"; exit 1; }
+            marker="<!-- agent-reply:${SHA:0:12}:$id -->"
+            if jq -e --arg m "$marker" 'any(.[]; .body | contains($m))' <<<"$comments" > /dev/null; then echo "Already replied to $id for ${SHA:0:12}"; continue; fi
+            body="$marker"$'\n'"Agent reply, from the head commit message ("'`'"${SHA:0:12}"'`'"):"$'\n\n'"$text"$'\n\n---\n_Posted by the workflow on the agent's behalf. The agent cannot post on GitHub._'
+            gh api -X POST "repos/$REPO/pulls/$PR/comments/$id/replies" -f body="$body" > /dev/null
+            echo "Replied to $id"
+          done <<<"$section"
+
+  # Thin caller of the reusable reviewer. The federation IDs live in ai-review.yml as defaults.
+  ai-review:
+    needs: [open-pr, gate-guard]
+    if: needs.open-pr.outputs.number != '' && needs.gate-guard.outputs.touched == 'false'
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      checks: read
+      actions: read
+      id-token: write
+    uses: ./.github/workflows/ai-review.yml
+    with:
+      pr_number: ${{ needs.open-pr.outputs.number }}
+      head_sha: ${{ github.sha }}
