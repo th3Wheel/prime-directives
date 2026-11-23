@@ -63,6 +63,8 @@ def read_lock(root: Path) -> Lock:
         raise LockError(f"no lock file at {path}; run `prime-directives initialize`") from exc
     except json.JSONDecodeError as exc:
         raise LockError(f"lock file {path} is not valid JSON: {exc}") from exc
+    if not isinstance(data, dict):
+        raise LockError(f"lock file {path} must contain a JSON object")
     if data.get("schemaVersion") != SCHEMA_VERSION:
         raise LockError(
             f"lock schema {data.get('schemaVersion')!r} is not supported by this tool "
