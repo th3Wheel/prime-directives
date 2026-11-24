@@ -102,6 +102,8 @@ def _validate(lock: Lock, path: Path) -> None:
     for name, value in top.items():
         if not isinstance(value, str):
             raise LockError(f"lock file {path} is malformed: {name} must be a string")
+    if lock.profile not in ("project", "master"):
+        raise LockError(f"lock file {path} is malformed: unknown profile {lock.profile!r}")
     if not isinstance(lock.files, list):
         raise LockError(f"lock file {path} is malformed: files must be a list")
     for entry in lock.files:

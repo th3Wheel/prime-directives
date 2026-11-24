@@ -365,6 +365,7 @@ def test_failed_load_scan_restores_previous_state(release: Path, target: Path) -
         lambda d: d["files"][0].update(target="/etc/passwd"),
         lambda d: d["files"][0].update(target="../outside.md"),
         lambda d: d["files"][0].update(kind="weird"),
+        lambda d: d.update(profile="bogus"),
     ],
 )
 def test_unsafe_lock_targets_and_unknown_kinds_are_rejected(
@@ -399,3 +400,31 @@ def test_self_refuses_moved_tag(release: Path, tmp_path: Path) -> None:
     source = _MovedTagSource(release, lock["tag"], "b" * 40)
     with pytest.raises(DeployError, match="must never move"):
         self_render(root, source, lock["source"]["repo"], None)
+
+
+def test_scan_reports_symlinked_managed_file(release: Path, target: Path, tmp_path: Path) -> None:
+    init(release, target)
+    outside = tmp_path / "outside.md"
+    outside.write_text((target / "AGENTS.md").read_text())
+    (target / "AGENTS.md").unlink()
+    (target / "AGENTS.md").symlink_to(outside)
+    assert run(release, "scan", "--path", str(target)) == 1
+
+
+def test_scan_reports_non_utf8_nested_claude_md(release: Path, target: Path) -> None:
+    init(release, target)
+    (target / "sub").mkdir()
+    (target / "sub" / "CLAUDE.md").write_bytes(b"\xff\xfe\x00bad")
+    assert run(release, "scan", "--path", str(target)) == 1
+
+
+def test_failed_write_during_apply_rolls_back(
+    release: Path, target: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def boom(*_args, **_kwargs) -> None:
+        raise OSError("disk full")
+
+    monkeypatch.setattr("prime_directives.engine.write_lock", boom)
+    with pytest.raises(OSError):
+        run(release, "initialize", str(target))
+    assert list(target.rglob("*")) == []

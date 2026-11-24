@@ -52,8 +52,26 @@ def _now() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _read_or_none(path: Path) -> str | None:
+    try:
+        return path.read_text()
+    except (UnicodeDecodeError, OSError):
+        return None
+
+
+def _is_symlinked(root: Path, rel: str | Path) -> bool:
+    current = root
+    for part in Path(rel).parts:
+        current = current / part
+        if current.is_symlink():
+            return True
+    return False
+
+
 def _existing(root: Path, rel: str) -> str | None:
     path = root / rel
+    if _is_symlinked(root, rel):
+        return None  # never read through a symlink; _check_lock_files reports it
     return path.read_text() if path.is_file() else None
 
 
@@ -197,32 +215,36 @@ def apply(
         | {LOCK_PATH.as_posix(), (LOCAL_DIR / ".gitkeep").as_posix()}
     )
     undo = _snapshot(root, touched)
-    for src, dest in moves:
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(src, dest)
-    for item in files:
-        path = root / item.target
-        old = path.read_text() if path.is_file() else ""
-        if old != item.content:
-            changes[item.target] = (old, item.content)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(item.content)
-    for target, path in stale:
-        changes[target] = (path.read_text(), "")
-        path.unlink()
-    (root / LOCAL_DIR).mkdir(parents=True, exist_ok=True)
-    keep = root / LOCAL_DIR / ".gitkeep"
-    if not any((root / LOCAL_DIR).iterdir()):
-        keep.touch()
-    lock = Lock(
-        repo=repo,
-        tag=release.tag,
-        commit=release.commit,
-        rendered_at=_now(),
-        profile=profile,
-        files=[f.locked() for f in files],
-    )
-    write_lock(root, lock)
+    try:
+        for src, dest in moves:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(src, dest)
+        for item in files:
+            path = root / item.target
+            old = path.read_text() if path.is_file() else ""
+            if old != item.content:
+                changes[item.target] = (old, item.content)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(item.content)
+        for target, path in stale:
+            changes[target] = (path.read_text(), "")
+            path.unlink()
+        (root / LOCAL_DIR).mkdir(parents=True, exist_ok=True)
+        keep = root / LOCAL_DIR / ".gitkeep"
+        if not any((root / LOCAL_DIR).iterdir()):
+            keep.touch()
+        lock = Lock(
+            repo=repo,
+            tag=release.tag,
+            commit=release.commit,
+            rendered_at=_now(),
+            profile=profile,
+            files=[f.locked() for f in files],
+        )
+        write_lock(root, lock)
+    except Exception:
+        undo()  # a failed write must not leave a half-applied deployment
+        raise
     return lock, changes, undo
 
 
@@ -366,7 +388,14 @@ def scan(root: Path, source, min_version: str | None) -> ScanResult:
 
 def _check_lock_files(root: Path, locked: dict[str, LockedFile], result: ScanResult) -> None:
     for target, entry in locked.items():
-        current = _existing(root, target)
+        if _is_symlinked(root, target):
+            result.problems.append(f"{target}: is a symlink, not a regular managed file")
+            continue
+        try:
+            current = _existing(root, target)
+        except (UnicodeDecodeError, OSError):
+            result.problems.append(f"{target}: unreadable or not UTF-8 text")
+            continue
         if current is None:
             result.problems.append(f"{target}: listed in the lock but missing")
             continue
@@ -395,7 +424,10 @@ def _check_rogue(root: Path, locked: dict[str, LockedFile], result: ScanResult) 
         if path.name in ROGUE_NAMES or (rel.parts[0] == ".cursor" and len(rel.parts) > 1):
             result.problems.append(f"{key}: unmanaged instruction file")
         elif path.name == "CLAUDE.md":
-            if path.read_text().strip() != STUB and not is_generated(path.read_text()):
+            text = _read_or_none(path)
+            if text is None:
+                result.problems.append(f"{key}: unreadable or not UTF-8 text")
+            elif text.strip() != STUB and not is_generated(text):
                 result.problems.append(f"{key}: nested CLAUDE.md must be the `{STUB}` stub")
             if not (path.parent / "AGENTS.md").is_file():
                 result.problems.append(f"{key}: stub has no sibling AGENTS.md")
@@ -403,5 +435,5 @@ def _check_rogue(root: Path, locked: dict[str, LockedFile], result: ScanResult) 
             stub = path.parent / "CLAUDE.md"
             if not stub.is_file():
                 result.problems.append(f"{key}: no CLAUDE.md stub next to it")
-            elif stub.read_text().strip() != STUB:
+            elif (_read_or_none(stub) or "").strip() != STUB:
                 result.problems.append(f"{key}: sibling CLAUDE.md is not the `{STUB}` stub")
