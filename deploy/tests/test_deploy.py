@@ -340,6 +340,11 @@ def test_failed_post_render_scan_rolls_back(release: Path, target: Path) -> None
     assert not (target / LOCK_PATH).exists()
     assert not (target / "AGENTS.md").exists()
     assert (target / "sub" / "AGENTS.md").read_text() == "# nested, no stub\n"
+    # Directories created by the failed apply are removed too; only the pre-existing tree remains.
+    assert sorted(p.relative_to(target).as_posix() for p in target.rglob("*")) == [
+        "sub",
+        "sub/AGENTS.md",
+    ]
 
 
 def test_failed_load_scan_restores_previous_state(release: Path, target: Path) -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import difflib
 import json
 import shutil
@@ -70,6 +71,13 @@ def _refuse_symlinks(root: Path, rel: str | Path) -> None:
 def _snapshot(root: Path, rels: set[str]) -> Callable[[], None]:
     """Remember these files so a failed post-render scan can put everything back."""
     saved = {rel: (root / rel).read_bytes() if (root / rel).is_file() else None for rel in rels}
+    # Directories that do not exist yet; the apply will create them, so undo must remove them.
+    new_dirs = {
+        parent
+        for rel in rels
+        for parent in (root / rel).parents
+        if root in parent.parents and not parent.exists()
+    }
 
     def undo() -> None:
         for rel, data in saved.items():
@@ -79,6 +87,10 @@ def _snapshot(root: Path, rels: set[str]) -> Callable[[], None]:
             else:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(data)
+        # Deepest first; a directory that still holds other files is not ours to remove.
+        for directory in sorted(new_dirs, key=lambda d: len(d.parts), reverse=True):
+            with contextlib.suppress(OSError):
+                directory.rmdir()
 
     return undo
 
