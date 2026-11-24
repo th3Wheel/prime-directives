@@ -11,7 +11,7 @@ How a change travels in this repo:
 
 1. The worker pushes an `agent/<task-id>` branch as `th3wheel-agent`. Agents never push to `main`.
 2. `.github/workflows/open-agent-pr.yml` opens the PR from a fixed template. It quotes the head commit message and reads an `Agent-Session:` commit trailer, so every worker commit carries one.
-3. CODEOWNERS makes `@th3Wheel` (Thomas) the required reviewer. Only Thomas approves and merges.
+3. Only Thomas approves and merges. CODEOWNERS requests his review, and the repo ruleset's required code-owner approval enforces it; the repo setup must keep that rule on, because CODEOWNERS alone does not block a merge.
 
 Agents never approve or merge a PR, and never edit workflows, CODEOWNERS, rulesets or secrets.
 
