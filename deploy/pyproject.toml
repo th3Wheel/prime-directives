@@ -1,0 +1,34 @@
+[project]
+name = "prime-directives"
+version = "0.1.0"
+description = "Deploy tool for the Prime Directives agent rules"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+dependencies = []
+
+[project.scripts]
+prime-directives = "prime_directives.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.8", "ty>=0.0.1a1"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/prime_directives"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
