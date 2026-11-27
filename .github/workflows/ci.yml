@@ -1,9 +1,9 @@
-# DRAFT example CI that still runs for PRs opened by github-actions[bot].
-# Install as .github/workflows/ci.yml (replace the placeholder step with the repo's real checks).
+# CI that still runs for PRs opened by github-actions[bot]: tests with coverage, then SonarCloud analysis.
+# SonarCloud runs here (CI-based analysis), not as Automatic Analysis. Settings: sonar-project.properties.
 name: CI
 on:
   push:
-    branches: ['agent/**']        # agent pushes (App token pushes DO trigger workflows)
+    branches: [main, 'agent/**']  # main for the Sonar baseline; agent pushes (App token pushes DO trigger workflows)
   pull_request:                   # human PRs and later pushes by humans
     branches: [main]
 
@@ -16,7 +16,19 @@ jobs:
     if: github.event_name == 'push' || !startsWith(github.head_ref, 'agent/')
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - name: Checks
-        run: echo "replace with real checks (lint, tests)"
+        with:
+          fetch-depth: 0          # SonarCloud needs full history for blame and new-code detection
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v6
+      - name: Test with coverage
+        run: uv run --frozen --project deploy pytest deploy/tests --cov --cov-report=xml:coverage.xml
+      # Pull requests and main only: the free plan has no analysis of other branches. Skipped when the token is
+      # absent (Dependabot PRs and forks get no secrets); the required "SonarCloud Code Analysis" check then
+      # never reports, so such a PR stays blocked.
+      - name: SonarCloud scan
+        if: env.SONAR_TOKEN != '' && (github.event_name == 'pull_request' || github.ref == 'refs/heads/main')
+        uses: SonarSource/sonarqube-scan-action@v7
