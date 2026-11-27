@@ -14,9 +14,9 @@
 # Optional env: SUMMARY RISK
 set -euo pipefail
 for v in TEMPLATE BRANCH BASE PUSHER SHA_SHORT STAT SESSION_TXT RUN_URL RUN_ID REVIEWER; do
-  [ -n "${!v:-}" ] || { echo "render-agent-pr-body: $v is not set" >&2; exit 2; }
+  [[ -n "${!v:-}" ]] || { echo "render-agent-pr-body: $v is not set" >&2; exit 2; }
 done
-[ -f "$TEMPLATE" ] || { echo "render-agent-pr-body: template not found: $TEMPLATE" >&2; exit 2; }
+[[ -f "$TEMPLATE" ]] || { echo "render-agent-pr-body: template not found: $TEMPLATE" >&2; exit 2; }
 export SUMMARY="${SUMMARY:-}" RISK="${RISK:-}"
 
 awk '

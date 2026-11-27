@@ -7,7 +7,7 @@
 #
 # Required env: TEMPLATE (path to the template file)
 set -euo pipefail
-[ -n "${TEMPLATE:-}" ] && [ -f "$TEMPLATE" ] || { echo "render-review-checklist: TEMPLATE is not set or not a file" >&2; exit 2; }
+[[ -n "${TEMPLATE:-}" ]] && [[ -f "$TEMPLATE" ]] || { echo "render-review-checklist: TEMPLATE is not set or not a file" >&2; exit 2; }
 
 awk '
 /^<!-- part:/ { in_part = ($0 ~ /^<!-- part:reviewer/); if (in_part) found = 1; next }
