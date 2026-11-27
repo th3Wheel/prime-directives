@@ -37,6 +37,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "S"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 
 [tool.coverage.run]
 relative_files = true

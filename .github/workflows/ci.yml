@@ -24,8 +24,11 @@ jobs:
           fetch-depth: 0          # SonarCloud needs full history for blame and new-code detection
           persist-credentials: false
       - uses: astral-sh/setup-uv@v6
+      # --no-build and --no-install-project: nothing runs a build script; tests import from src (pytest pythonpath).
+      - name: Install dev dependencies
+        run: uv sync --frozen --no-build --no-install-project --project deploy
       - name: Test with coverage
-        run: uv run --frozen --project deploy pytest deploy/tests --cov --cov-report=xml:coverage.xml
+        run: uv run --no-sync --project deploy pytest deploy/tests --cov --cov-report=xml:coverage.xml
       # Pull requests and main only: the free plan has no analysis of other branches. Skipped when the token is
       # absent (Dependabot PRs and forks get no secrets); the required "SonarCloud Code Analysis" check then
       # never reports, so such a PR stays blocked.
