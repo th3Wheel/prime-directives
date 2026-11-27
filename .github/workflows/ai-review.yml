@@ -139,7 +139,7 @@ jobs:
             || { echo "::error::Could not read every review thread (no thread list, more than 100 threads, or a thread with more than 50 comments)"; exit 1; }
 
       - name: Fill out the review checklist
-        uses: anthropics/claude-code-action@8251c103ac8c1d761882c86aba1412c7f583c844 # v1.0.213
+        uses: anthropics/claude-code-action@eb56b6666facdbd501035f4a0269d8caee2e7a8b # v1.0.289
         with:
           anthropic_federation_rule_id: ${{ inputs.federation_rule_id }}
           anthropic_organization_id: ${{ inputs.organization_id }}
