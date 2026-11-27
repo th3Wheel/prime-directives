@@ -80,7 +80,7 @@ jobs:
     steps:
       # Default branch only: the reviewer sees the base repo (AGENTS.md, config), never the agent's branch checked out.
       - name: Check out the default branch
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
@@ -88,7 +88,7 @@ jobs:
       # The standard: template and script from the rubric repo's main (the caller's own repo when it is the rubric repo).
       # A private rubric repo called from another repo needs the optional rubric_token secret; the default token cannot read it.
       - name: Check out the rubric repo (default branch)
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.rubric_repo }}
           ref: ${{ inputs.rubric_ref }}
