@@ -11,7 +11,12 @@ dependencies = []
 prime-directives = "prime_directives.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.8", "ty>=0.0.1a1"]
+dev = [
+    "pytest>=8",
+    "pytest-cov>=6",
+    "ruff>=0.8",
+    "ty>=0.0.1a1",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -32,3 +37,8 @@ select = ["E", "F", "I", "UP", "B", "SIM", "S"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.coverage.run]
+relative_files = true
+source = ["deploy/src/prime_directives"]
